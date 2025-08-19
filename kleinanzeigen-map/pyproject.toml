@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "kleinanzeigen"
+version = "0.1.0"
+description = ""
+authors = ["Moritz Enderle <contact@moritzenderle.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.13"
+requests = "^2.31.0"
+sqlalchemy = "^2.0.23"
+beautifulsoup4 = "^4.12.2"
+streamlit = "^1.28.0"
+folium = "^0.15.0"
+streamlit-folium = "^0.15.0"
+pandas = "^2.1.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
