@@ -109,6 +109,14 @@ class FlexibleKleinanzeigenScraper:
                     relative_url = link_elem['href'] if link_elem else ""
                     full_url = urljoin("https://www.kleinanzeigen.de", relative_url) if relative_url else ""
                     
+                    # Extract first image
+                    image_url = ""
+                    image_div = listing.find('div', class_='aditem-image')
+                    if image_div:
+                        img_elem = image_div.find('img')
+                        if img_elem and img_elem.get('src'):
+                            image_url = img_elem['src']
+                    
                     # Skip if essential data is missing
                     if not title or not full_url:
                         continue
@@ -127,6 +135,7 @@ class FlexibleKleinanzeigenScraper:
                         'plz': plz,
                         'ort': ort,
                         'url': full_url,  # Include URL for current results
+                        'image_url': image_url,  # Include first image URL
                         'latitude': None,
                         'longitude': None
                     }
@@ -153,6 +162,8 @@ class FlexibleKleinanzeigenScraper:
 
     def scrape_all_pages(self, max_pages=50, progress_callback=None):
         """Scrape all pages up to max_pages"""
+        reached_max_pages = False
+        
         try:
             # Scrape all pages
             for page_num in range(1, max_pages + 1):
@@ -164,6 +175,10 @@ class FlexibleKleinanzeigenScraper:
                         print(f"Page {page_num} has no listings - reached end of results")
                         break
                     
+                    # Check if we reached the maximum pages
+                    if page_num == max_pages:
+                        reached_max_pages = True
+                    
                 except Exception as e:
                     if progress_callback:
                         progress_callback(f"Failed to scrape page {page_num}: {e}")
@@ -172,12 +187,17 @@ class FlexibleKleinanzeigenScraper:
             # Final summary
             if progress_callback:
                 total_scraped = len(self.all_listings)
-                progress_callback(f"Scraping completed! Found {total_scraped} total listings")
+                if reached_max_pages:
+                    progress_callback(f"Scraping completed! Found {total_scraped} total listings (nur die ersten {max_pages} Seiten durchsucht)")
+                else:
+                    progress_callback(f"Scraping completed! Found {total_scraped} total listings")
+                
+            return reached_max_pages
                 
         except Exception as e:
             if progress_callback:
                 progress_callback(f"Error checking pagination: {e}")
-            actual_max_pages = max_pages
+            return False
     
     def save_to_database(self, progress_callback=None):
         """Save all collected listings to the database"""

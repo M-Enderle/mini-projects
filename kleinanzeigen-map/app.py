@@ -58,7 +58,7 @@ def scrape_data(keyword):
         progress_text.text(message)
     
     try:
-        scraper.scrape_all_pages(50, progress_callback)
+        reached_max_pages = scraper.scrape_all_pages(50, progress_callback)
         scraper.save_to_database(progress_callback)
         
         # Get results and add coordinates from PLZ
@@ -87,9 +87,10 @@ def scrape_data(keyword):
         # Convert to data format
         data = []
         for listing in listings:
-            # Get URL from scraped data since it's not stored in database
+            # Get URL and image from scraped data since they're not stored in database
             scraped_listing = next((item for item in scraper.all_listings if item['title'] == listing.title and item['plz'] == listing.plz), None)
             url = scraped_listing['url'] if scraped_listing else ""
+            image_url = scraped_listing['image_url'] if scraped_listing else ""
             
             data.append({
                 'title': listing.title,
@@ -97,16 +98,19 @@ def scrape_data(keyword):
                 'plz': listing.plz,
                 'ort': listing.ort,
                 'url': url,  # Include URL from scraped data
+                'image_url': image_url,  # Include image URL from scraped data
                 'latitude': listing.latitude,
                 'longitude': listing.longitude
             })
         
         scraper.close()
-        return data
+        
+        # Return data and whether max pages was reached
+        return data, reached_max_pages
     except Exception as e:
         st.error(f"Fehler: {e}")
         scraper.close()
-        return []
+        return [], False
 
 def clean_price_display(price_str):
     """Clean price string for display - keep first price and VB if present"""
@@ -236,6 +240,12 @@ def create_simple_map(data):
         clean_price = clean_price_display(item['price'])
         
         popup_content = f"<b>{item['title'][:50]}</b><br><b>Preis: {clean_price or 'k.A.'}</b><br>Standort: {item['plz']} {item['ort']}"
+        
+        # Add image if available
+        if item.get('image_url'):
+            popup_content += f"<br><img src='{item['image_url']}' style='max-width: 200px; max-height: 150px; margin-top: 5px;'>"
+        
+        # Add URL link if available
         if item.get('url'):
             popup_content += f"<br><a href='{item['url']}' target='_blank'>Anzeige ansehen</a>"
             
@@ -264,11 +274,14 @@ with col2:
 # Search action - always scrape fresh data
 if search_btn and keyword:
     with st.spinner("Suche läuft..."):
-        results = scrape_data(keyword)
+        results, reached_max_pages = scrape_data(keyword)
         if results:
             st.session_state.results = results
             st.session_state.last_keyword = keyword
-            st.success(f"{len(results)} Anzeigen gefunden!")
+            success_message = f"{len(results)} Anzeigen gefunden!"
+            if reached_max_pages:
+                success_message += " ⚠️ Es werden nur die ersten 50 Seiten angezeigt."
+            st.success(success_message)
         else:
             st.warning("Keine Ergebnisse gefunden")
 
