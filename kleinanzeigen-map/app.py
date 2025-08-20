@@ -47,27 +47,6 @@ if 'results' not in st.session_state:
 if 'last_keyword' not in st.session_state:
     st.session_state.last_keyword = None
 
-def load_existing_data(keyword):
-    """Load existing data from database"""
-    try:
-        scraper = FlexibleKleinanzeigenScraper(keyword)
-        listings = scraper.get_all_listings()
-        data = []
-        for listing in listings:
-            data.append({
-                'title': listing.title,
-                'price': listing.price,
-                'plz': listing.plz,
-                'ort': listing.ort,
-                'url': listing.url,
-                'latitude': listing.latitude,
-                'longitude': listing.longitude
-            })
-        scraper.close()
-        return data
-    except:
-        return []
-
 def scrape_data(keyword):
     """Scrape new data"""
     scraper = FlexibleKleinanzeigenScraper(keyword)
@@ -108,12 +87,16 @@ def scrape_data(keyword):
         # Convert to data format
         data = []
         for listing in listings:
+            # Get URL from scraped data since it's not stored in database
+            scraped_listing = next((item for item in scraper.all_listings if item['title'] == listing.title and item['plz'] == listing.plz), None)
+            url = scraped_listing['url'] if scraped_listing else ""
+            
             data.append({
                 'title': listing.title,
                 'price': listing.price,
                 'plz': listing.plz,
                 'ort': listing.ort,
-                'url': listing.url,
+                'url': url,  # Include URL from scraped data
                 'latitude': listing.latitude,
                 'longitude': listing.longitude
             })
@@ -155,11 +138,11 @@ def create_simple_map(data):
     if not valid_data:
         return None
     
-    # Center map
-    avg_lat = sum(d['latitude'] for d in valid_data) / len(valid_data)
-    avg_lon = sum(d['longitude'] for d in valid_data) / len(valid_data)
+    # Center map on Germany (hardcoded coordinates)
+    germany_center_lat = 51.1657
+    germany_center_lon = 10.4515
     
-    m = folium.Map(location=[avg_lat, avg_lon], zoom_start=6)
+    m = folium.Map(location=[germany_center_lat, germany_center_lon], zoom_start=6)
     
     # Calculate price statistics for relative coloring
     prices = []
@@ -252,9 +235,13 @@ def create_simple_map(data):
         # Clean price for display
         clean_price = clean_price_display(item['price'])
         
+        popup_content = f"<b>{item['title'][:50]}</b><br><b>Preis: {clean_price or 'k.A.'}</b><br>Standort: {item['plz']} {item['ort']}"
+        if item.get('url'):
+            popup_content += f"<br><a href='{item['url']}' target='_blank'>Anzeige ansehen</a>"
+            
         folium.Marker(
             location=[item['latitude'], item['longitude']],
-            popup=f"<b>{item['title'][:50]}</b><br><b>Preis: {clean_price or 'k.A.'}</b><br>Standort: {item['plz']} {item['ort']}<br><a href='{item['url']}' target='_blank'>Anzeige ansehen</a>",
+            popup=popup_content,
             tooltip=f"{clean_price or 'Kein Preis'} - {item['ort']}",
             icon=folium.Icon(color=color, icon=icon, prefix='fa')
         ).add_to(m)
@@ -274,25 +261,7 @@ with col2:
     st.write("")  # spacing
     search_btn = st.button("🔍 Suchen", type="primary", use_container_width=True)
 
-# Auto-load existing data when keyword changes
-if keyword and (not st.session_state.get('last_keyword') or st.session_state.last_keyword != keyword):
-    existing = load_existing_data(keyword)
-    if existing:
-        st.session_state.results = existing
-        st.session_state.last_keyword = keyword
-        
-        # Check how many have coordinates
-        with_coords = len([d for d in existing if d['latitude']])
-        total = len(existing)
-        
-        if with_coords == 0:
-            st.warning(f"📋 {total} Ergebnisse für '{keyword}' geladen - aber noch keine GPS-Koordinaten. Klicke auf Suchen um Koordinaten hinzuzufügen.")
-        elif with_coords < total:
-            st.info(f"📋 {total} Ergebnisse für '{keyword}' geladen - {with_coords} haben GPS-Koordinaten")
-        else:
-            st.success(f"📋 {total} Ergebnisse für '{keyword}' geladen - alle haben GPS-Koordinaten")
-
-# Search action
+# Search action - always scrape fresh data
 if search_btn and keyword:
     with st.spinner("Suche läuft..."):
         results = scrape_data(keyword)
@@ -326,7 +295,7 @@ if st.session_state.results:
     
     map_obj = create_simple_map(data)
     if map_obj:
-        st_folium(map_obj, width=1000, height=500)
+        st_folium(map_obj, width="100%", height=500)
     else:
         st.info("Keine Standorte zum Anzeigen auf der Karte gefunden")
 

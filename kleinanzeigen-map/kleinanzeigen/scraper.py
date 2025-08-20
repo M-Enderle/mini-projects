@@ -19,7 +19,7 @@ class KleinanzeigenListing(Base):
     price = Column(String(100))  # Keep as string to handle various price formats
     plz = Column(String(10))
     ort = Column(String(200))
-    url = Column(Text)
+    # url = Column(Text)  # Removed URL storage
     latitude = Column(Float)  # Add coordinates for mapping
     longitude = Column(Float)
     scraped_at = Column(DateTime, default=datetime.utcnow)
@@ -104,7 +104,7 @@ class FlexibleKleinanzeigenScraper:
                         if len(parts) >= 2:
                             ort = parts[1]
                     
-                    # Extract URL
+                    # Extract URL - store for current results but not in database
                     link_elem = listing.find('a', href=True)
                     relative_url = link_elem['href'] if link_elem else ""
                     full_url = urljoin("https://www.kleinanzeigen.de", relative_url) if relative_url else ""
@@ -126,7 +126,7 @@ class FlexibleKleinanzeigenScraper:
                         'price': price,
                         'plz': plz,
                         'ort': ort,
-                        'url': full_url,
+                        'url': full_url,  # Include URL for current results
                         'latitude': None,
                         'longitude': None
                     }
@@ -184,21 +184,24 @@ class FlexibleKleinanzeigenScraper:
         if progress_callback:
             progress_callback(f"Saving {len(self.all_listings)} listings to database...")
         
+        # Clear existing data for this keyword to ensure fresh results
+        try:
+            self.session.query(KleinanzeigenListing).filter_by(keyword=self.keyword).delete()
+            self.session.commit()
+        except Exception as e:
+            if progress_callback:
+                progress_callback(f"Error clearing existing data: {e}")
+            self.session.rollback()
+        
         for listing_data in self.all_listings:
             try:
-                # Check if listing already exists (by URL)
-                existing = self.session.query(KleinanzeigenListing).filter_by(url=listing_data['url']).first()
-                if existing:
-                    continue
-                
-                # Create new listing
+                # Create new listing (no duplicate checking)
                 listing = KleinanzeigenListing(
                     keyword=listing_data['keyword'],
                     title=listing_data['title'],
                     price=listing_data['price'],
                     plz=listing_data['plz'],
                     ort=listing_data['ort'],
-                    url=listing_data['url'],
                     latitude=listing_data['latitude'],
                     longitude=listing_data['longitude']
                 )
