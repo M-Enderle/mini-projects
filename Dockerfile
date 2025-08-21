@@ -2,7 +2,7 @@ FROM python:3.13-slim
 
 # Install nginx and poetry
 RUN apt-get update && apt-get install -y nginx && rm -rf /var/lib/apt/lists/*
-RUN pip install poetry
+RUN pip install poetry && poetry config virtualenvs.create false
 
 WORKDIR /app
 

@@ -6,7 +6,7 @@ authors = ["Moritz <you@example.com>"]
 package-mode = false
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.13"
+python = ">=3.10,<3.14"
 flask = "^3.0.0"
 requests = "^2.32.0"
 seaborn = "^0.13.2"
