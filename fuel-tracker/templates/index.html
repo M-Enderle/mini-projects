@@ -1,0 +1,23 @@
+{% extends 'layout.html' %}
+{% block content %}
+<h1 class="page-title">Tankstellen</h1>
+<div class="grid">
+	{% for s in stations %}
+	<a class="card" href="{{ url_for('station_detail', station_id=s['external_id']) }}">
+		<div class="card-header">
+			{% if s['logo_url'] %}<img src="{{ s['logo_url'] }}" alt="logo" class="logo"/>{% endif %}
+			<h2>{{ s['name'] or 'Unknown' }}</h2>
+			{% if s['current_price'] %}
+				<span class="price">{{ "%.3f"|format(s['current_price']) }}€</span>
+			{% endif %}
+		</div>
+		<p class="muted">{{ s['street'] }} {{ s['house_number'] }}, {{ s['postal_code'] }} {{ s['city'] }}</p>
+
+	</a>
+	{% else %}
+		<div class="empty">
+			<p>Noch keine Tankstellen. Füge Einträge in <code>fuel-tracker/data/urls.txt</code> im Format <code>Name,URL</code> hinzu und warte ~1 Minute auf die Aktualisierung oder drücke "Jetzt aktualisieren".</p>
+		</div>
+	{% endfor %}
+</div>
+{% endblock %} 

@@ -1,43 +1,36 @@
-# Mini Projects - Simple Version
+# Mini Projects
 
-One container that runs nginx + your projects.
+Collection of small web applications running in Docker.
 
-## Usage
+## Services
+
+- **Kleinanzeigen Map** (Port 8501) - Visualizes classified ads on a map
+- **Spritpreis Tracker** (Port 5001) - Tracks fuel station prices every minute
+
+## Setup
 
 ```bash
-# Start
-docker-compose up -d
+# Build and start all services
+docker-compose up --build
 
-# Stop  
-docker-compose down
-
-# View logs
-docker-compose logs -f
+# Access the services
+open http://localhost:4000
 ```
 
-## Access
+## Individual Services
 
-- Main page: http://localhost:4000
-- Kleinanzeigen Map: http://localhost:4000/kleinanzeigen-map/
+### Kleinanzeigen Map
+- Streamlit app at `/kleinanzeigen-map/`
+- SQLite database: `kleinanzeigen-map/kleinanzeigen.db`
 
-## Add New Project
+### Spritpreis Tracker  
+- Flask app at `/fuel-tracker/`
+- SQLite database: `fuel-tracker/fuel_tracker.db`
+- Background fetcher runs every 60 seconds
+- Configure stations in `fuel-tracker/data/urls.txt`
 
-1. Create project directory with `pyproject.toml`
-2. Add to `Dockerfile`:
-   ```dockerfile
-   COPY your-project/ ./your-project/
-   RUN cd your-project && poetry install
-   ```
-3. Add to `nginx.conf`:
-   ```nginx
-   location /your-project/ {
-       proxy_pass http://localhost:8502/;
-   }
-   ```
-4. Add to `start.sh`:
-   ```bash
-   cd your-project && poetry run your-command &
-   ```
-5. Rebuild: `docker-compose up -d --build`
+## Architecture
 
-That's it! 
+- **Nginx** reverse proxy on port 4000
+- **Docker Compose** orchestrates all services
+- **Volume mounts** persist databases 

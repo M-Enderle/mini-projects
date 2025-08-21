@@ -5,3 +5,4 @@ services:
       - "4000:4000"
     volumes:
       - ./kleinanzeigen-map/kleinanzeigen.db:/app/kleinanzeigen-map/kleinanzeigen.db
+      - ./fuel-tracker/fuel_tracker.db:/app/fuel-tracker/fuel_tracker.db

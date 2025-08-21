@@ -1,0 +1,3 @@
+Turmöl Puchenau,https://www.oeamtc.at/routenplaner/api/gis-fuel/fuel/detail/1000465
+OMV Linz,https://www.oeamtc.at/routenplaner/api/gis-fuel/fuel/detail/1140215
+BP Linz,https://www.oeamtc.at/routenplaner/api/gis-fuel/fuel/detail/1211145

@@ -1,0 +1,106 @@
+{% extends 'layout.html' %}
+{% block content %}
+<a href="{{ url_for('index') }}" class="back">← Zurück</a>
+<div class="station-header">
+	<div class="info">
+		<div class="title-row">
+			{% if station['logo_url'] %}
+				<img src="{{ station['logo_url'] }}" alt="logo" class="logo-lg"/>
+			{% endif %}
+			<h1>{{ station['name'] }}</h1>
+		</div>
+		<p class="muted">{{ station['street'] }} {{ station['house_number'] }}, {{ station['postal_code'] }} {{ station['city'] }}</p>
+	</div>
+</div>
+<div class="two-col">
+	<div>
+		<h2 style="margin: 16px 0 12px 0;">Karte</h2>
+		<div id="map" class="map"></div>
+	</div>
+	<div>
+		<h2 style="margin: 16px 0 12px 0;">Preisverlauf</h2>
+		<div class="chart"><img src="{{ url_for('api_station_chart', station_id=station['external_id'], chart_type='history') }}" alt="Preisverlauf"/></div>
+	</div>
+</div>
+
+<div class="grid" style="margin-top:24px; grid-template-columns: 1fr;">
+	<div class="card">
+		<h2 class="chart-title">Durchschnittspreis pro Wochentag</h2>
+		<div class="chart"><img src="{{ url_for('api_station_chart', station_id=station['external_id'], chart_type='weekday') }}" alt="Durchschnitt pro Wochentag"/></div>
+	</div>
+	<div class="card">
+		<h2 class="chart-title">Durchschnittspreis pro Stunde</h2>
+		<div class="chart"><img src="{{ url_for('api_station_chart', station_id=station['external_id'], chart_type='hour') }}" alt="Durchschnitt pro Stunde"/></div>
+	</div>
+	<div class="card">
+		<h2 class="chart-title">Durchschnittspreis pro Monat</h2>
+		<div class="chart"><img src="{{ url_for('api_station_chart', station_id=station['external_id'], chart_type='month') }}" alt="Durchschnitt pro Monat"/></div>
+	</div>
+	<div class="card">
+		<h2 class="chart-title">Günstigster Preis pro Tag</h2>
+		<div class="chart"><img src="{{ url_for('api_station_chart', station_id=station['external_id'], chart_type='min_day') }}" alt="Günstigster pro Tag"/></div>
+	</div>
+</div>
+
+<script>
+	const lat = {{ station['latitude'] or 'null' }};
+	const lon = {{ station['longitude'] or 'null' }};
+	if (lat && lon) {
+		const map = L.map('map', { zoomControl: true }).setView([lat, lon], 14);
+		L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+			maxZoom: 19,
+			attribution: '&copy; OpenStreetMap contributors'
+		}).addTo(map);
+		L.marker([lat, lon]).addTo(map).bindPopup(`{{ station['name']|e }}`);
+	}
+
+	// No JS needed for charts; only Leaflet map remains.
+	async function loadHistory_DISABLED() {
+		const res = await fetch('{{ url_for('api_station_history', station_id=station['external_id']) }}');
+		const data = await res.json();
+		// Split by fuel
+		const byFuel = {};
+		for (const row of data) {
+			const key = row.fuel;
+			if (!byFuel[key]) byFuel[key] = { x: [], y: [], name: key };
+			byFuel[key].x.push(row.fetched_at);
+			byFuel[key].y.push(row.price);
+		}
+		const traces = Object.values(byFuel);
+		const layout = {
+			height: 420,
+			margin: { t: 20, r: 20, b: 80, l: 60 },
+			xaxis: { title: 'Time' },
+			yaxis: { title: 'Price (per liter)' },
+			legend: { orientation: 'h' },
+			paper_bgcolor: 'transparent',
+			plot_bgcolor: 'transparent'
+		};
+		/* Plotly removed */
+	}
+
+	async function loadStats_DISABLED() {
+		const res = await fetch('{{ url_for('api_station_stats', station_id=station['external_id']) }}');
+		const s = await res.json();
+		// Weekday: SQLite %w returns 0..6 (Sun..Sat). Map to labels
+		const weekdayLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+		const wX = s.avg_by_weekday.map(r => weekdayLabels[parseInt(r.weekday)]);
+		const wY = s.avg_by_weekday.map(r => r.avg_price);
+		Plotly.newPlot('chart_weekday', [{ x: wX, y: wY, type: 'bar', marker: { color: '#2563eb' } }], { margin:{t:20,r:10,b:60,l:50}, yaxis:{title:'€ / L'}, xaxis:{title:''}, paper_bgcolor:'transparent', plot_bgcolor:'transparent' }, { displayModeBar:false, responsive:true });
+
+		const hX = s.avg_by_hour.map(r => r.hour.padStart(2,'0'));
+		const hY = s.avg_by_hour.map(r => r.avg_price);
+		Plotly.newPlot('chart_hour', [{ x: hX, y: hY, type: 'scatter', mode:'lines+markers', line:{color:'#16a34a'} }], { margin:{t:20,r:10,b:60,l:50}, yaxis:{title:'€ / L'}, xaxis:{title:'Hour'}, paper_bgcolor:'transparent', plot_bgcolor:'transparent' }, { displayModeBar:false, responsive:true });
+
+		const mX = s.avg_by_month.map(r => r.month);
+		const mY = s.avg_by_month.map(r => r.avg_price);
+		Plotly.newPlot('chart_month', [{ x: mX, y: mY, type: 'scatter', mode:'lines', line:{color:'#f59e0b'} }], { margin:{t:20,r:10,b:60,l:50}, yaxis:{title:'€ / L'}, xaxis:{title:'Month'}, paper_bgcolor:'transparent', plot_bgcolor:'transparent' }, { displayModeBar:false, responsive:true });
+
+		const dX = s.min_by_day.map(r => r.day);
+		const dY = s.min_by_day.map(r => r.min_price);
+		Plotly.newPlot('chart_min_day', [{ x: dX, y: dY, type: 'scatter', mode:'lines+markers', line:{color:'#ef4444'} }], { margin:{t:20,r:10,b:60,l:50}, yaxis:{title:'€ / L'}, xaxis:{title:'Day'}, paper_bgcolor:'transparent', plot_bgcolor:'transparent' }, { displayModeBar:false, responsive:true });
+	}
+
+	// Charts are static images now.
+</script>
+{% endblock %} 

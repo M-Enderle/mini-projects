@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "fuel-tracker"
+version = "0.1.0"
+description = "Fuel station tracker with 15-minute history, Flask frontend, SQLite storage, Plotly charts"
+authors = ["Moritz <you@example.com>"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+flask = "^3.0.0"
+requests = "^2.32.0"
+seaborn = "^0.13.2"
+matplotlib = "^3.9.0"
+
+[tool.poetry.group.dev.dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api" 

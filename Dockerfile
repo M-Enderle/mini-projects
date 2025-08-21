@@ -10,8 +10,14 @@ WORKDIR /app
 COPY kleinanzeigen-map/ ./kleinanzeigen-map/
 RUN cd kleinanzeigen-map && poetry install
 
-# Copy nginx config
+# Copy and install fuel-tracker
+COPY fuel-tracker/ ./fuel-tracker/
+RUN cd fuel-tracker && poetry install
+
+# Copy nginx config and static index page
 COPY nginx.conf /etc/nginx/nginx.conf
+RUN mkdir -p /usr/share/nginx/html
+COPY index.html /usr/share/nginx/html/index.html
 
 # Simple startup script
 COPY start.sh ./
