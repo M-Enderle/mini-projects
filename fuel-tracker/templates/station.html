@@ -1,6 +1,6 @@
 {% extends 'layout.html' %}
 {% block content %}
-<a href="{{ url_for('index') }}" class="back">← Zurück</a>
+<a href="{{ base_path }}/" class="back">← Zurück</a>
 <div class="station-header">
 	<div class="info">
 		<div class="title-row">
@@ -19,26 +19,26 @@
 	</div>
 	<div>
 		<h2 style="margin: 16px 0 12px 0;">Preisverlauf</h2>
-		<div class="chart"><img src="{{ url_for('api_station_chart', station_id=station['external_id'], chart_type='history') }}" alt="Preisverlauf"/></div>
+		<div class="chart"><img src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/history.png" alt="Preisverlauf"/></div>
 	</div>
 </div>
 
 <div class="grid" style="margin-top:24px; grid-template-columns: 1fr;">
 	<div class="card">
 		<h2 class="chart-title">Durchschnittspreis pro Wochentag</h2>
-		<div class="chart"><img src="{{ url_for('api_station_chart', station_id=station['external_id'], chart_type='weekday') }}" alt="Durchschnitt pro Wochentag"/></div>
+		<div class="chart"><img src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/weekday.png" alt="Durchschnitt pro Wochentag"/></div>
 	</div>
 	<div class="card">
 		<h2 class="chart-title">Durchschnittspreis pro Stunde</h2>
-		<div class="chart"><img src="{{ url_for('api_station_chart', station_id=station['external_id'], chart_type='hour') }}" alt="Durchschnitt pro Stunde"/></div>
+		<div class="chart"><img src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/hour.png" alt="Durchschnitt pro Stunde"/></div>
 	</div>
 	<div class="card">
 		<h2 class="chart-title">Durchschnittspreis pro Monat</h2>
-		<div class="chart"><img src="{{ url_for('api_station_chart', station_id=station['external_id'], chart_type='month') }}" alt="Durchschnitt pro Monat"/></div>
+		<div class="chart"><img src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/month.png" alt="Durchschnitt pro Monat"/></div>
 	</div>
 	<div class="card">
 		<h2 class="chart-title">Günstigster Preis pro Tag</h2>
-		<div class="chart"><img src="{{ url_for('api_station_chart', station_id=station['external_id'], chart_type='min_day') }}" alt="Günstigster pro Tag"/></div>
+		<div class="chart"><img src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/min_day.png" alt="Günstigster pro Tag"/></div>
 	</div>
 </div>
 
@@ -56,7 +56,7 @@
 
 	// No JS needed for charts; only Leaflet map remains.
 	async function loadHistory_DISABLED() {
-		const res = await fetch('{{ url_for('api_station_history', station_id=station['external_id']) }}');
+		const res = await fetch('{{ base_path }}/api/station/{{ station['external_id'] }}/history');
 		const data = await res.json();
 		// Split by fuel
 		const byFuel = {};

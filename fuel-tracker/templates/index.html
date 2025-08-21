@@ -3,7 +3,7 @@
 <h1 class="page-title">Tankstellen</h1>
 <div class="grid">
 	{% for s in stations %}
-	<a class="card" href="{{ url_for('station_detail', station_id=s['external_id']) }}">
+	<a class="card" href="{{ base_path }}/station/{{ s['external_id'] }}">
 		<div class="card-header">
 			{% if s['logo_url'] %}<img src="{{ s['logo_url'] }}" alt="logo" class="logo"/>{% endif %}
 			<h2>{{ s['name'] or 'Unknown' }}</h2>

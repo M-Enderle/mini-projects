@@ -8,6 +8,7 @@ from database import get_db, init_db, close_db, fetch_stations, fetch_station_by
 from fetcher import fetch_once_all, start_background_fetch_loop
 from database import fetch_price_stats, fetch_stations_with_current_price
 from charts import render_history, render_bar, render_line
+from typing import Callable
 
 
 def create_app() -> Flask:
@@ -16,6 +17,11 @@ def create_app() -> Flask:
 	# Configure for reverse proxy
 	from werkzeug.middleware.proxy_fix import ProxyFix
 	app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+	
+	# Inject base path for all templates
+	@app.context_processor
+	def inject_base_path():
+		return dict(base_path="/fuel-tracker")
 
 	# Ensure DB exists
 	with app.app_context():
@@ -29,14 +35,16 @@ def create_app() -> Flask:
 	@app.route("/")
 	def index():
 		stations = fetch_stations_with_current_price()
-		return render_template("index.html", stations=stations)
+		base = "/fuel-tracker"
+		return render_template("index.html", stations=stations, base_path=base)
 
 	@app.route("/station/<station_id>")
 	def station_detail(station_id: str):
 		station = fetch_station_by_id(station_id)
 		if not station:
 			return redirect(url_for("index"))
-		return render_template("station.html", station=station)
+		base = "/fuel-tracker"
+		return render_template("station.html", station=station, base_path=base)
 
 	@app.route("/api/stations")
 	def api_stations():
