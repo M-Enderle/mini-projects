@@ -16,7 +16,7 @@ RUN cd fuel-tracker && poetry install
 
 # Copy and install recipe-book
 COPY recipe-book/ ./recipe-book/
-RUN cd recipe-book && poetry install
+RUN cd recipe-book && poetry install && poetry run playwright install
 
 # Copy nginx config and static index page
 COPY nginx.conf /etc/nginx/nginx.conf
