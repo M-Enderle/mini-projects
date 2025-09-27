@@ -1,0 +1,127 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ recipe.title }} · Rezeptbuch{% endblock %}
+
+{% block content %}
+{% set ingredients_list = recipe.ingredients|json_loads %}
+{% set steps_list = recipe.steps|json_loads %}
+<article class="detail{% if ingredients_list or steps_list %} with-sections{% endif %}" data-recipe-slug="{{ recipe.slug }}">
+  <header class="detail-hero">
+    {% if recipe.image_url %}
+    <div class="media">
+      <img src="{{ recipe.image_url }}" alt="{{ recipe.title }}">
+    </div>
+  {% endif %}
+    <div class="copy">
+      <p class="eyebrow">{{ recipe.source }}</p>
+      <h1>{{ recipe.title }}</h1>
+      <p class="description">{{ recipe.description }}</p>
+      {% if recipe.rating %}
+      {% set rating_value = recipe.rating|float %}
+      <div class="stars" aria-label="Bewertung {{ recipe.rating }} von 5">
+        {% for i in range(1, 6) %}
+        <span class="star{% if i <= rating_value %} filled{% endif %}">★</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if recipe.tags %}
+      <div class="filters-row">
+        <div class="tags">
+          {% for tag in recipe.tags %}
+          <span>{{ tag }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </header>
+
+  {% if ingredients_list %}
+  <section class="ingredients">
+    <h2>Zutaten</h2>
+    <div class="ingredients-content">
+      {% set current_section = [] %}
+      {% for item in ingredients_list %}
+        {% if item is mapping and item.type == "header" %}
+          {% if current_section %}
+            </ul>
+          {% endif %}
+          <h3 class="ingredient-section-header">{{ item.text }}</h3>
+          <ul class="ingredient-section">
+          {% set _ = current_section.append(true) %}
+        {% else %}
+          {% if not current_section %}
+            <ul class="ingredient-section">
+            {% set _ = current_section.append(true) %}
+          {% endif %}
+          <li class="ingredient-item" data-index="{{ loop.index0 }}">{{ item }}</li>
+        {% endif %}
+      {% endfor %}
+      {% if current_section %}
+        </ul>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if steps_list %}
+  <section class="steps">
+    <h2>Schritte</h2>
+    <ol>
+      {% for step in steps_list %}
+      <li>
+        <div class="step-body">
+          <p>{{ step.text }}</p>
+        </div>
+      </li>
+      {% endfor %}
+    </ol>
+  </section>
+  {% endif %}
+</article>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  // Ingredient selection functionality
+  var article = document.querySelector('article.detail');
+  if (!article) return;
+  var slug = article.dataset.recipeSlug;
+  var items = article.querySelectorAll('.ingredients .ingredient-item');
+  if (!slug || !items.length) return;
+  var name = 'ingredients-' + slug;
+  var path = '{{ base_path or "/" }}';
+  function readCookie(key) {
+    return document.cookie.split('; ').find(function (row) {
+      return row.startsWith(key + '=');
+    });
+  }
+  function getSelection() {
+    var entry = readCookie(name);
+    if (!entry) return [];
+    var value = entry.split('=')[1] || '';
+    return decodeURIComponent(value).split(',').filter(Boolean);
+  }
+  function setSelection(list) {
+    var value = encodeURIComponent(list.join(','));
+    document.cookie = name + '=' + value + '; path=' + path + '; max-age=86400';
+  }
+  var selected = new Set(getSelection());
+  items.forEach(function (item) {
+    var idx = item.dataset.index;
+    if (selected.has(idx)) item.classList.add('ingredient-checked');
+    item.addEventListener('click', function () {
+      if (item.classList.toggle('ingredient-checked')) {
+        selected.add(idx);
+      } else {
+        selected.delete(idx);
+      }
+      setSelection(Array.from(selected));
+    });
+  });
+});
+</script>
+{% endblock %}
+

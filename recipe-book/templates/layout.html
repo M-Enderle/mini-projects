@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Rezeptbuch{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <div class="page">
+    <header class="site-header">
+      <a href="{{ url_for('home') }}" class="brand">Rezeptbuch</a>
+      <nav>
+        {% if show_edit_link %}
+        <a href="{{ url_for('recipe_edit', slug=show_edit_link.slug) }}">Bearbeiten</a>
+        <form style="display: inline;" method="post" action="{{ url_for('recipe_delete', slug=show_edit_link.slug) }}" onsubmit="return confirm('Rezept wirklich löschen?')">
+          <button type="submit" style="background: none; border: none; color: var(--muted); font-size: 14px; text-decoration: none; margin-left: 18px; cursor: pointer;">Löschen</button>
+        </form>
+        {% endif %}
+        {% if not show_edit_link %}
+        <a href="{{ url_for('recipe_create') }}">Neu</a>
+        {% endif %}
+      </nav>
+    </header>
+    <main>
+      {% with messages = get_flashed_messages() %}
+      {% if messages %}
+      <ul class="flash">
+        {% for message in messages %}
+        <li>{{ message }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
+

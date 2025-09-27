@@ -1,0 +1,311 @@
+{% extends "layout.html" %}
+
+{% block title %}{% if is_new %}Neues Rezept{% else %}Rezept bearbeiten{% endif %} · Rezeptbuch{% endblock %}
+
+{% block content %}
+<section class="form-shell">
+  <header>
+    <p class="eyebrow">{% if is_new %}Rezept hinzufügen{% else %}Rezept bearbeiten{% endif %}</p>
+    <h1>{% if is_new %}Neue Kreation{% else %}Details kuratieren{% endif %}</h1>
+    <p class="lede">Gestalte Rezepte im selben schlanken Stil. Alle Felder gepflegt, eine Bewertung pro Gericht.</p>
+  </header>
+
+  <form method="post" class="recipe-form" enctype="multipart/form-data">
+    {% if is_new %}
+    <section class="ai-panel">
+      <header>
+        <p class="eyebrow">KI Assistent</p>
+        <h2>Gemini erstellt das Rezept</h2>
+        <p>Nutzen Sie eine der Optionen und verfeinern Sie anschließend die Details.</p>
+      </header>
+
+      <div class="ai-grid">
+        <div class="ai-card">
+          <div class="ai-icon">📷</div>
+          <h3>Bild hochladen</h3>
+          <p>Foto eines Gerichts analysieren lassen</p>
+          <input type="file" name="gemini_image" accept="image/*" class="ai-input">
+          <button type="submit" name="action" value="generate_image" class="button ai-button" formnovalidate>Aus Bild generieren</button>
+        </div>
+
+        <div class="ai-card">
+          <div class="ai-icon">📝</div>
+          <h3>Textbeschreibung</h3>
+          <p>Kurze Beschreibung eingeben</p>
+          <textarea name="gemini_text" rows="3" placeholder="Zum Beispiel: Cremiges Zitronenrisotto mit karamellisierten Pilzen" class="ai-input"></textarea>
+          <button type="submit" name="action" value="generate_text" class="button ai-button" formnovalidate>Aus Text generieren</button>
+        </div>
+
+        <div class="ai-card">
+          <div class="ai-icon">🔗</div>
+          <h3>URL analysieren</h3>
+          <p>Rezeptseite verlinken und strukturieren lassen</p>
+          <input type="url" name="gemini_url" placeholder="https://beispiel.de/rezept" class="ai-input">
+          <button type="submit" name="action" value="generate_url" class="button ai-button" formnovalidate>Aus URL generieren</button>
+        </div>
+      </div>
+
+      <div class="ai-divider" data-label="Oder manuell ausfüllen"></div>
+    </section>
+    {% endif %}
+
+    <label>
+      <span>Titel</span>
+      <input type="text" name="title" value="{{ recipe.title }}" required>
+    </label>
+
+    <label>
+      <span>Beschreibung</span>
+      <textarea name="description" rows="5" required>{{ recipe.description }}</textarea>
+    </label>
+
+    <fieldset class="image-options">
+      <legend>Rezeptbild (optional)</legend>
+      
+      {% if recipe.image_url and not is_new %}
+      <div class="current-image">
+        <label>Aktuelles Bild:</label>
+        <img src="{{ recipe.image_url }}" alt="{{ recipe.title }}" style="max-width: 200px; max-height: 150px; border-radius: 4px; margin-top: 8px;">
+      </div>
+      <div class="divider-text">Neues Bild wählen</div>
+      {% endif %}
+      
+      <label>
+        <span>Bild hochladen</span>
+        <input type="file" name="image_upload" accept="image/*" class="file-input">
+        <small class="help-text">JPG, PNG, WebP oder GIF bis 5MB</small>
+      </label>
+      
+      <div class="divider-text">oder</div>
+      
+      <label>
+        <span>Bild-URL</span>
+        <input type="url" name="image_url" value="{{ recipe.image_url }}" placeholder="https://...">
+        <small class="help-text">Link zu einem Bild im Internet</small>
+      </label>
+    </fieldset>
+
+    <label>
+      <span>Quelle</span>
+      <input type="text" name="source" value="{{ recipe.source }}" required>
+    </label>
+
+    <label>
+      <span>Filter (durch Kommata getrennt)</span>
+      <input type="text" name="filters" value="{{ recipe.filters }}">
+    </label>
+
+    <label>
+      <span>Zutaten (eine pro Zeile)</span>
+      <textarea name="ingredients" rows="4" placeholder="# Für die Soße
+200ml Sahne
+1 EL Senf
+
+# Für das Hauptgericht
+500g Fleisch
+2 Zwiebeln">{% for item in recipe.ingredients|default('[]')|json_loads %}{% if item is mapping and item.type == "header" %}# {{ item.text }}{% else %}{{ item }}{% endif %}
+{% endfor %}</textarea>
+      <small class="help-text">Verwende # am Zeilenanfang für Abschnittsüberschriften (z.B. "# Für die Soße")</small>
+    </label>
+
+    {% set existing_steps = recipe.steps|default('[]')|json_loads %}
+    <div class="steps-form" data-next-index="{{ existing_steps|length if existing_steps else 1 }}">
+      <span>Schritte</span>
+      {% if existing_steps %}
+        {% for step in existing_steps %}
+        {% set step_text = step.text if step is mapping else step %}
+        <div class="step-row">
+          <textarea name="steps[]" rows="2" placeholder="Schritt beschreiben">{{ step_text }}</textarea>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="step-row">
+          <textarea name="steps[]" rows="2" placeholder="Schritt beschreiben"></textarea>
+        </div>
+      {% endif %}
+      <button type="button" class="button muted add-step">Schritt hinzufügen</button>
+    </div>
+
+    <template id="step-row-template">
+      <div class="step-row">
+        <textarea rows="2" placeholder="Schritt beschreiben"></textarea>
+      </div>
+    </template>
+
+    <label>
+      <span>Bewertung</span>
+      <select name="rating">
+        <option value="">Keine Bewertung</option>
+        {% for stars in [5,4,3,2,1] %}
+        <option value="{{ stars }}" {% if recipe.rating == stars %}selected{% endif %}>{{ stars }} ★</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    {% if is_new %}
+    <label>
+      <span>JSON-Datei importieren (optional)</span>
+      <input type="file" id="json_file" name="json_file" accept=".json">
+    </label>
+    {% endif %}
+
+    <div class="actions">
+      <button type="submit" class="button">Speichern</button>
+      <a class="button muted" href="{{ url_for('home') }}">Abbrechen</a>
+    </div>
+  </form>
+</section>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (window.stepFormInitialized) return;
+  window.stepFormInitialized = true;
+
+  var form = document.querySelector('.recipe-form');
+  if (!form) return;
+
+  var stepsForm = form.querySelector('.steps-form');
+  var addButton = stepsForm ? stepsForm.querySelector('.add-step') : null;
+  var template = document.getElementById('step-row-template');
+  if (!stepsForm || !addButton || !template) return;
+
+  function attachNames(row) {
+    var textarea = row.querySelector('textarea');
+    if (textarea) textarea.name = 'steps[]';
+  }
+
+  function createStepRow() {
+    var clone = template.content.cloneNode(true);
+    var row = clone.querySelector('.step-row');
+    attachNames(row);
+    return row;
+  }
+
+  function syncExistingRows() {
+    var count = 0;
+    stepsForm.querySelectorAll('.step-row').forEach(function (row) {
+      attachNames(row);
+      count += 1;
+    });
+    stepsForm.dataset.nextIndex = String(count);
+  }
+
+  syncExistingRows();
+
+  if (!addButton.dataset.initialized) {
+    addButton.dataset.initialized = 'true';
+    addButton.addEventListener('click', function (event) {
+      event.preventDefault();
+      var row = createStepRow();
+      var textarea = row.querySelector('textarea');
+      if (textarea) textarea.value = '';
+      stepsForm.insertBefore(row, addButton);
+      syncExistingRows();
+    });
+  }
+
+  var jsonFileInput = document.getElementById('json_file');
+  if (jsonFileInput && !jsonFileInput.dataset.initialized) {
+    jsonFileInput.dataset.initialized = 'true';
+    jsonFileInput.addEventListener('change', handleJsonUpload);
+  }
+
+  function handleJsonUpload(event) {
+    var file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    var reader = new FileReader();
+    reader.onload = function (loadEvent) {
+      try {
+        var raw = loadEvent.target && loadEvent.target.result;
+        var jsonData = JSON.parse(raw);
+        populateFormFromJson(jsonData);
+      } catch (error) {
+        alert('Ungültige JSON-Datei: ' + error.message);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function populateFormFromJson(data) {
+    var recipe = Array.isArray(data) ? data[0] : data;
+    if (!recipe || typeof recipe !== 'object') {
+      alert('Ungültiges Rezept-Format');
+      return;
+    }
+
+    function setValue(selector, value) {
+      if (value === undefined || value === null || value === '') return;
+      var field = form.querySelector(selector);
+      if (field) field.value = value;
+    }
+
+    setValue('input[name="title"]', recipe.title);
+    setValue('textarea[name="description"]', recipe.description);
+    setValue('input[name="image_url"]', recipe.image_url);
+    setValue('input[name="source"]', recipe.source);
+
+    if (recipe.filters) {
+      var filtersValue = Array.isArray(recipe.filters)
+        ? recipe.filters.join(', ')
+        : recipe.filters;
+      setValue('input[name="filters"]', filtersValue);
+    }
+
+    if (recipe.rating !== undefined && recipe.rating !== null && recipe.rating !== '') {
+      var ratingSelect = form.querySelector('select[name="rating"]');
+      if (ratingSelect) {
+        var ratingValue = String(recipe.rating);
+        var hasOption = Array.from(ratingSelect.options).some(function (option) {
+          return option.value === ratingValue;
+        });
+        ratingSelect.value = hasOption ? ratingValue : '';
+      }
+    }
+
+    if (recipe.ingredients) {
+      var ingredientsText = Array.isArray(recipe.ingredients)
+        ? recipe.ingredients.join('\n')
+        : String(recipe.ingredients);
+      setValue('textarea[name="ingredients"]', ingredientsText);
+    }
+
+    if (recipe.steps) {
+      var steps = recipe.steps;
+      if (typeof steps === 'string') {
+        steps = steps
+          .split('\n')
+          .map(function (text) { return text.trim(); })
+          .filter(Boolean)
+          .map(function (text) { return { text: text }; });
+      } else if (Array.isArray(steps)) {
+        steps = steps.map(function (step) {
+          return typeof step === 'string' ? { text: step } : step;
+        });
+      } else {
+        steps = [];
+      }
+
+      stepsForm.querySelectorAll('.step-row').forEach(function (row) {
+        row.remove();
+      });
+
+      var normalized = steps.length ? steps : [{}];
+      normalized.forEach(function (step) {
+        var row = createStepRow();
+        var textarea = row.querySelector('textarea');
+        if (textarea) textarea.value = (step && step.text) || '';
+        stepsForm.insertBefore(row, addButton);
+      });
+
+      syncExistingRows();
+    }
+
+    alert('JSON erfolgreich importiert! Bitte überprüfen Sie die Felder vor dem Speichern.');
+  }
+});
+</script>
+{% endblock %}
+{% endblock %}
+

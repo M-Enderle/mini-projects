@@ -14,6 +14,10 @@ RUN cd kleinanzeigen-map && poetry install
 COPY fuel-tracker/ ./fuel-tracker/
 RUN cd fuel-tracker && poetry install
 
+# Copy and install recipe-book
+COPY recipe-book/ ./recipe-book/
+RUN cd recipe-book && poetry install
+
 # Copy nginx config and static index page
 COPY nginx.conf /etc/nginx/nginx.conf
 RUN mkdir -p /usr/share/nginx/html

@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "recipe-book"
+version = "0.1.0"
+description = "Flask recipe book with vector search"
+authors = ["Moritz Enderle <contact@moritzenderle.com>"]
+readme = "README.md"
+packages = [{include = "recipe_book"}]
+
+[tool.poetry.dependencies]
+python = "^3.13"
+flask = "^3.1.2"
+sqlalchemy = "^2.0.43"
+sentence-transformers = "^5.1.1"
+flask-sqlalchemy = "^3.1.1"
+google-genai = "^1.39.0"
+python-dotenv = "^1.1.1"
+playwright = "^1.55.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

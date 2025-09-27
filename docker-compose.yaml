@@ -6,3 +6,4 @@ services:
     volumes:
       - ./kleinanzeigen-map/kleinanzeigen.db:/app/kleinanzeigen-map/kleinanzeigen.db
       - ./fuel-tracker/fuel_tracker.db:/app/fuel-tracker/fuel_tracker.db
+      - ./recipe-book/recipe_book.db:/app/recipe-book/recipe_book.db
