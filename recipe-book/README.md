@@ -166,12 +166,13 @@ The application is flexible with input formats:
 
 ### Searching Recipes
 
-The application uses semantic search powered by AI embeddings:
+The application uses semantic search powered by Google Gemini embeddings:
 
 - Search by ingredients: "Zitrus, Pasta"
 - Search by cuisine: "Italienisch"
 - Search by dish type: "Dessert"
 - Search by cooking method: "Gebraten"
+- Natural language queries: "Schnelle vegetarische Gerichte"
 
 ### Filtering
 
@@ -183,7 +184,8 @@ The application uses semantic search powered by AI embeddings:
 ### Architecture
 
 - **Backend**: Flask with SQLite database
-- **Search**: Sentence transformers for semantic embeddings
+- **Search**: Google Gemini embeddings for semantic search
+- **AI Generation**: Google Gemini for recipe creation from images, text, and URLs
 - **Frontend**: Vanilla HTML/CSS/JavaScript
 - **Styling**: Custom CSS with modern design
 
@@ -199,9 +201,9 @@ CREATE TABLE recipe (
     source VARCHAR(200) NOT NULL,
     filters VARCHAR(500),
     rating FLOAT,
-    ingredients TEXT, -- JSON array
+    ingredients TEXT, -- JSON array with optional section headers (# Header)
     steps TEXT,       -- JSON array
-    embedding BLOB,   -- AI embedding vector
+    embedding BLOB,   -- Gemini embedding vector
     embedding_dim INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

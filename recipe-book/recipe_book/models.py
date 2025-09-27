@@ -35,4 +35,20 @@ class Recipe(db.Model):
         if not self.embedding or not self.embedding_dim:
             return None
         return np.frombuffer(self.embedding, dtype=np.float32)
+    
+    def similarity_to(self, query_vector: np.ndarray) -> float:
+        """Calculate cosine similarity between this recipe's embedding and a query vector."""
+        recipe_vector = self.embedding_vector()
+        if recipe_vector is None:
+            return 0.0
+        
+        # Normalize vectors
+        recipe_norm = np.linalg.norm(recipe_vector)
+        query_norm = np.linalg.norm(query_vector)
+        
+        if recipe_norm == 0 or query_norm == 0:
+            return 0.0
+        
+        # Calculate cosine similarity
+        return float(np.dot(recipe_vector, query_vector) / (recipe_norm * query_norm))
 

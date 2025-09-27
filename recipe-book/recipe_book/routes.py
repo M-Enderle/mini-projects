@@ -10,6 +10,7 @@ from flask import Blueprint, abort, current_app, flash, redirect, render_templat
 from sqlalchemy import func, or_
 
 from .extensions import db
+from .embedding import embed_query
 from .gemini import generate_recipe_from_image, generate_recipe_from_text, generate_recipe_from_url
 from .models import Recipe
 from .services import fetch_sources
@@ -116,28 +117,50 @@ def home():
     if min_rating is not None:
         base_query = base_query.filter(func.coalesce(Recipe.rating, 0) >= min_rating)
 
-    if query:
-        terms = [part for part in re.split(r"\s+", query) if part]
-        search_fields = (
-            Recipe.title,
-            Recipe.description,
-            Recipe.filters,
-            Recipe.ingredients,
-        )
-        for term in terms:
-            like = f"%{term}%"
-            base_query = base_query.filter(or_(*[field.ilike(like) for field in search_fields]))
-        base_query = base_query.order_by(
-            func.coalesce(Recipe.rating, 0).desc(),
-            Recipe.created_at.desc(),
-        )
-    else:
-        base_query = base_query.order_by(
-            func.coalesce(Recipe.rating, 0).desc(),
-            Recipe.created_at.desc(),
-        )
-
     recipes = base_query.all()
+    
+    # If there's a search query, use semantic search with embeddings
+    if query:
+        query_vector = embed_query(query)
+        if query_vector is not None:
+            # Calculate similarity scores for all recipes
+            recipe_scores = []
+            for recipe in recipes:
+                similarity = recipe.similarity_to(query_vector)
+                if similarity > 0.1:  # Only include recipes with some similarity
+                    recipe_scores.append((recipe, similarity))
+            
+            # Sort by similarity score (descending)
+            recipe_scores.sort(key=lambda x: x[1], reverse=True)
+            recipes = [recipe for recipe, _ in recipe_scores]
+        else:
+            # Fallback to text search if embedding fails
+            terms = [part for part in re.split(r"\s+", query) if part]
+            search_fields = (
+                Recipe.title,
+                Recipe.description,
+                Recipe.filters,
+                Recipe.ingredients,
+            )
+            filtered_recipes = []
+            for recipe in recipes:
+                match = False
+                for term in terms:
+                    for field in [recipe.title, recipe.description, recipe.filters, recipe.ingredients or ""]:
+                        if field and term.lower() in field.lower():
+                            match = True
+                            break
+                    if match:
+                        break
+                if match:
+                    filtered_recipes.append(recipe)
+            recipes = filtered_recipes
+            
+            # Sort by rating and date for fallback search
+            recipes.sort(key=lambda r: (r.rating or 0, r.created_at or 0), reverse=True)
+    else:
+        # No query - sort by rating and creation date
+        recipes.sort(key=lambda r: (r.rating or 0, r.created_at or 0), reverse=True)
 
     return render_template(
         "home.html",
