@@ -17,9 +17,9 @@ load_dotenv()
 def create_app() -> Flask:
     app = Flask(
         __name__,
-        static_folder="../static",
+        static_folder="static",
         static_url_path=f"{base_path()}/static",
-        template_folder="../templates",
+        template_folder="templates",
     )
     app.config.update(
         SQLALCHEMY_DATABASE_URI=sqlalchemy_uri(),
