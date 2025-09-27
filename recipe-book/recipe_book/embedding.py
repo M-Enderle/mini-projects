@@ -50,9 +50,20 @@ def embed_recipe(recipe: Recipe) -> None:
             model="models/text-embedding-004",
             contents=text
         )
-        
-        if result.embedding and result.embedding.values:
-            vector = np.array(result.embedding.values, dtype=np.float32)
+
+        # google-genai >=1.39 returns `embeddings` list instead of `embedding`
+        values = None
+        try:
+            if getattr(result, "embeddings", None):
+                first = result.embeddings[0]
+                values = getattr(first, "values", None)
+            elif getattr(result, "embedding", None):
+                values = getattr(result.embedding, "values", None)
+        except Exception:
+            values = None
+
+        if values:
+            vector = np.array(values, dtype=np.float32)
             recipe.embedding = vector.tobytes()
             recipe.embedding_dim = len(vector)
             logger.debug("Embedding erstellt für Rezept '%s' mit Dimension %d", recipe.title, len(vector))
@@ -78,9 +89,19 @@ def embed_query(query: str) -> Optional[np.ndarray]:
             model="models/text-embedding-004",
             contents=query
         )
-        
-        if result.embedding and result.embedding.values:
-            return np.array(result.embedding.values, dtype=np.float32)
+
+        values = None
+        try:
+            if getattr(result, "embeddings", None):
+                first = result.embeddings[0]
+                values = getattr(first, "values", None)
+            elif getattr(result, "embedding", None):
+                values = getattr(result.embedding, "values", None)
+        except Exception:
+            values = None
+
+        if values:
+            return np.array(values, dtype=np.float32)
         else:
             logger.warning("Kein Embedding für Query erhalten: %s", query)
             return None
