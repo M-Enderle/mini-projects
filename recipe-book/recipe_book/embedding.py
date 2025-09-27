@@ -48,7 +48,7 @@ def embed_recipe(recipe: Recipe) -> None:
         client = get_client()
         result = client.models.embed_content(
             model="models/text-embedding-004",
-            content=text
+            contents=text
         )
         
         if result.embedding and result.embedding.values:
@@ -76,7 +76,7 @@ def embed_query(query: str) -> Optional[np.ndarray]:
         client = get_client()
         result = client.models.embed_content(
             model="models/text-embedding-004",
-            content=query
+            contents=query
         )
         
         if result.embedding and result.embedding.values:

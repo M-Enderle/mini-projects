@@ -23,6 +23,9 @@ COPY nginx.conf /etc/nginx/nginx.conf
 RUN mkdir -p /usr/share/nginx/html
 COPY index.html /usr/share/nginx/html/index.html
 
+# Copy favicon to nginx root to prevent 404s
+COPY recipe-book/static/favicon.svg /usr/share/nginx/html/favicon.ico
+
 # Copy static files for serving by nginx
 COPY recipe-book/static/ /usr/share/nginx/html/static/
 COPY fuel-tracker/static/ /usr/share/nginx/html/fuel-tracker-static/
