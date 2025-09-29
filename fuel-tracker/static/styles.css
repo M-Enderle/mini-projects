@@ -75,30 +75,31 @@ body {
 }
 
 .card { 
-	border-radius: 26px;
-	overflow: hidden;
-	border: 1px solid var(--border);
-	background: #fff;
-	display: flex;
-	flex-direction: column;
-	transition: transform 0.15s ease;
-	text-decoration: none; 
-	color: var(--text);
-	padding: 0;
+	border-radius: 26px !important;
+	overflow: hidden !important;
+	border: 1px solid var(--border) !important;
+	background: #fff !important;
+	display: flex !important;
+	flex-direction: column !important;
+	transition: transform 0.15s ease !important;
+	text-decoration: none !important; 
+	color: var(--text) !important;
+	padding: 0 !important;
+	margin-bottom: 0 !important;
 }
-.card:hover { transform: translateY(-4px); }
+.card:hover { transform: translateY(-4px) !important; }
 
 .card-header { 
-	display: flex; 
-	align-items: center; 
-	gap: 12px; 
-	margin: 0;
-	padding: 20px 24px 12px;
+	display: flex !important; 
+	align-items: center !important; 
+	gap: 12px !important; 
+	margin: 0 !important;
+	padding: 20px 24px 12px !important;
 }
 
 .card-body {
-	padding: 0 24px 24px;
-	flex: 1;
+	padding: 0 24px 24px !important;
+	flex: 1 !important;
 }
 .logo { width: 32px; height: 32px; object-fit: contain; }
 .logo-lg { width: 48px; height: 48px; object-fit: contain; }
