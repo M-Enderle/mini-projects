@@ -7,9 +7,11 @@
 	<link rel="icon" type="image/svg+xml" href="{{ base_path }}/static/favicon.svg">
 	<link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css">
 	<link rel="stylesheet" href="{{ base_path }}/static/styles.css">
+	<link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css">
+	<link rel="stylesheet" href="{{ base_path }}/static/styles.css">
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+	<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
 	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 
 	<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -20,17 +22,19 @@
 	</style>
 </head>
 <body>
-	<header class="app-header">
-		<div class="container header-inner">
+	<div class="container">
+		<header class="app-header">
 			<a href="{{ url_for('index') }}" class="brand">⛽ Spritpreise</a>
-			<form id="fetch-form" class="fetch-form" method="post" action="{{ url_for('fetch_now') }}">
-				<button type="submit" class="btn">Aktualisieren</button>
-			</form>
-		</div>
-	</header>
-	<main class="container">
-		{% block content %}{% endblock %}
-	</main>
+			<nav>
+				<form id="fetch-form" class="fetch-form" method="post" action="{{ url_for('fetch_now') }}" style="display: inline;">
+					<button type="submit" class="btn">Aktualisieren</button>
+				</form>
+			</nav>
+		</header>
+		<main>
+			{% block content %}{% endblock %}
+		</main>
+	</div>
 	<script>
 		document.getElementById('fetch-form')?.addEventListener('submit', async (e) => {
 			e.preventDefault();
