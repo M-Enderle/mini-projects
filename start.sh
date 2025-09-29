@@ -20,4 +20,4 @@ nginx &
 
 # Start kleinanzeigen app (keep as foreground process)
 cd ../kleinanzeigen-map
-poetry run streamlit run app.py --server.port=8501 --server.address=0.0.0.0 
+poetry run python app.py

@@ -1,6 +1,7 @@
 {% extends 'layout.html' %}
+{% block title %}{{ station['name'] }} - Spritpreis Tracker{% endblock %}
 {% block content %}
-<a href="{{ base_path }}/" class="back">← Zurück</a>
+<a href="{{ base_path }}/" class="back">← Zurück zur Übersicht</a>
 
 <div class="station-header">
 	<div class="info">
@@ -21,30 +22,38 @@
 	</div>
 	<div>
 		<h2 class="section-title">Preisverlauf</h2>
-		<div class="chart"><img src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/history.png" alt="Preisverlauf"/></div>
+		<div class="chart">
+			<canvas id="historyChart" style="display: none;"></canvas>
+			<img id="historyChartFallback" src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/history.png" alt="Preisverlauf"/>
+		</div>
 	</div>
 </div>
 
-<div class="grid" style="margin-top: 48px;">
+<div class="grid charts">
 	<div class="chart">
 		<h2 class="chart-title">Durchschnittspreis pro Wochentag</h2>
-		<img src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/weekday.png" alt="Durchschnitt pro Wochentag"/>
+		<canvas id="weekdayChart" style="display: none;"></canvas>
+		<img id="weekdayChartFallback" src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/weekday.png" alt="Durchschnitt pro Wochentag"/>
 	</div>
 	<div class="chart">
 		<h2 class="chart-title">Durchschnittspreis pro Stunde</h2>
-		<img src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/hour.png" alt="Durchschnitt pro Stunde"/>
+		<canvas id="hourChart" style="display: none;"></canvas>
+		<img id="hourChartFallback" src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/hour.png" alt="Durchschnitt pro Stunde"/>
 	</div>
 	<div class="chart">
 		<h2 class="chart-title">Durchschnittspreis pro Monat</h2>
-		<img src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/month.png" alt="Durchschnitt pro Monat"/>
+		<canvas id="monthChart" style="display: none;"></canvas>
+		<img id="monthChartFallback" src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/month.png" alt="Durchschnitt pro Monat"/>
 	</div>
 	<div class="chart">
 		<h2 class="chart-title">Günstigster Preis pro Tag</h2>
-		<img src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/min_day.png" alt="Günstigster pro Tag"/>
+		<canvas id="minDayChart" style="display: none;"></canvas>
+		<img id="minDayChartFallback" src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/min_day.png" alt="Günstigster pro Tag"/>
 	</div>
 </div>
 
 <script>
+	// Initialize map
 	const lat = {{ station['latitude'] or 'null' }};
 	const lon = {{ station['longitude'] or 'null' }};
 	if (lat && lon) {
@@ -56,53 +65,207 @@
 		L.marker([lat, lon]).addTo(map).bindPopup(`{{ station['name']|e }}`);
 	}
 
-	// No JS needed for charts; only Leaflet map remains.
-	async function loadHistory_DISABLED() {
-		const res = await fetch('{{ base_path }}/api/station/{{ station['external_id'] }}/history');
-		const data = await res.json();
-		// Split by fuel
-		const byFuel = {};
-		for (const row of data) {
-			const key = row.fuel;
-			if (!byFuel[key]) byFuel[key] = { x: [], y: [], name: key };
-			byFuel[key].x.push(row.fetched_at);
-			byFuel[key].y.push(row.price);
+	// Chart.js default configuration
+	Chart.defaults.font.family = "'Playfair Display', Georgia, 'Times New Roman', serif";
+	Chart.defaults.font.size = 12;
+	Chart.defaults.color = '#6b7280';
+	Chart.defaults.borderColor = '#e5e7eb';
+
+	const chartOptions = {
+		responsive: true,
+		maintainAspectRatio: false,
+		plugins: {
+			legend: {
+				display: false
+			}
+		},
+		scales: {
+			y: {
+				beginAtZero: false,
+				ticks: {
+					callback: function(value) {
+						return value.toFixed(3) + '€';
+					}
+				},
+				grid: {
+					color: '#e5e7eb'
+				}
+			},
+			x: {
+				grid: {
+					color: '#e5e7eb'
+				}
+			}
+		},
+		interaction: {
+			intersect: false,
+			mode: 'index'
+		},
+		elements: {
+			point: {
+				radius: 4,
+				hoverRadius: 6
+			},
+			line: {
+				borderWidth: 2,
+				tension: 0.1
+			}
 		}
-		const traces = Object.values(byFuel);
-		const layout = {
-			height: 420,
-			margin: { t: 20, r: 20, b: 80, l: 60 },
-			xaxis: { title: 'Time' },
-			yaxis: { title: 'Price (per liter)' },
-			legend: { orientation: 'h' },
-			paper_bgcolor: 'transparent',
-			plot_bgcolor: 'transparent'
-		};
-		/* Plotly removed */
+	};
+
+	// Load and display interactive charts
+	async function loadInteractiveCharts() {
+		try {
+			// Load history data
+			const historyRes = await fetch('{{ base_path }}/api/station/{{ station['external_id'] }}/history');
+			const historyData = await historyRes.json();
+			
+			if (historyData.length > 0) {
+				const historyCtx = document.getElementById('historyChart');
+				const historyFallback = document.getElementById('historyChartFallback');
+				
+				// Process history data
+				const processedHistory = historyData.map(row => ({
+					x: new Date(row.fetched_at),
+					y: row.price
+				}));
+
+				new Chart(historyCtx, {
+					type: 'line',
+					data: {
+						datasets: [{
+							data: processedHistory,
+							borderColor: '#111111',
+							backgroundColor: 'rgba(17, 17, 17, 0.1)',
+							fill: false
+						}]
+					},
+					options: {
+						...chartOptions,
+						scales: {
+							...chartOptions.scales,
+							x: {
+								...chartOptions.scales.x,
+								type: 'time',
+								time: {
+									displayFormats: {
+										hour: 'HH:mm',
+										day: 'DD.MM'
+									}
+								}
+							}
+						}
+					}
+				});
+
+				historyCtx.style.display = 'block';
+				historyFallback.style.display = 'none';
+			}
+
+			// Load stats data
+			const statsRes = await fetch('{{ base_path }}/api/station/{{ station['external_id'] }}/stats');
+			const stats = await statsRes.json();
+
+			// Weekday chart
+			if (stats.avg_by_weekday && stats.avg_by_weekday.length > 0) {
+				const weekdayCtx = document.getElementById('weekdayChart');
+				const weekdayFallback = document.getElementById('weekdayChartFallback');
+				const weekdayLabels = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+				
+				new Chart(weekdayCtx, {
+					type: 'bar',
+					data: {
+						labels: stats.avg_by_weekday.map(r => weekdayLabels[parseInt(r.weekday)]),
+						datasets: [{
+							data: stats.avg_by_weekday.map(r => r.avg_price),
+							backgroundColor: 'rgba(17, 17, 17, 0.8)',
+							borderColor: '#111111',
+							borderWidth: 1
+						}]
+					},
+					options: chartOptions
+				});
+
+				weekdayCtx.style.display = 'block';
+				weekdayFallback.style.display = 'none';
+			}
+
+			// Hour chart
+			if (stats.avg_by_hour && stats.avg_by_hour.length > 0) {
+				const hourCtx = document.getElementById('hourChart');
+				const hourFallback = document.getElementById('hourChartFallback');
+				
+				new Chart(hourCtx, {
+					type: 'line',
+					data: {
+						labels: stats.avg_by_hour.map(r => r.hour.toString().padStart(2, '0')),
+						datasets: [{
+							data: stats.avg_by_hour.map(r => r.avg_price),
+							borderColor: '#111111',
+							backgroundColor: 'rgba(17, 17, 17, 0.1)',
+							fill: false
+						}]
+					},
+					options: chartOptions
+				});
+
+				hourCtx.style.display = 'block';
+				hourFallback.style.display = 'none';
+			}
+
+			// Month chart
+			if (stats.avg_by_month && stats.avg_by_month.length > 0) {
+				const monthCtx = document.getElementById('monthChart');
+				const monthFallback = document.getElementById('monthChartFallback');
+				
+				new Chart(monthCtx, {
+					type: 'line',
+					data: {
+						labels: stats.avg_by_month.map(r => r.month),
+						datasets: [{
+							data: stats.avg_by_month.map(r => r.avg_price),
+							borderColor: '#111111',
+							backgroundColor: 'rgba(17, 17, 17, 0.1)',
+							fill: false
+						}]
+					},
+					options: chartOptions
+				});
+
+				monthCtx.style.display = 'block';
+				monthFallback.style.display = 'none';
+			}
+
+			// Min day chart
+			if (stats.min_by_day && stats.min_by_day.length > 0) {
+				const minDayCtx = document.getElementById('minDayChart');
+				const minDayFallback = document.getElementById('minDayChartFallback');
+				
+				new Chart(minDayCtx, {
+					type: 'line',
+					data: {
+						labels: stats.min_by_day.map(r => r.day),
+						datasets: [{
+							data: stats.min_by_day.map(r => r.min_price),
+							borderColor: '#111111',
+							backgroundColor: 'rgba(17, 17, 17, 0.1)',
+							fill: false
+						}]
+					},
+					options: chartOptions
+				});
+
+				minDayCtx.style.display = 'block';
+				minDayFallback.style.display = 'none';
+			}
+
+		} catch (error) {
+			console.log('Using fallback static charts due to error:', error);
+			// Keep fallback images visible if there's an error
+		}
 	}
 
-	async function loadStats_DISABLED() {
-		const res = await fetch('{{ url_for('api_station_stats', station_id=station['external_id']) }}');
-		const s = await res.json();
-		// Weekday: SQLite %w returns 0..6 (Sun..Sat). Map to labels
-		const weekdayLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-		const wX = s.avg_by_weekday.map(r => weekdayLabels[parseInt(r.weekday)]);
-		const wY = s.avg_by_weekday.map(r => r.avg_price);
-		Plotly.newPlot('chart_weekday', [{ x: wX, y: wY, type: 'bar', marker: { color: '#2563eb' } }], { margin:{t:20,r:10,b:60,l:50}, yaxis:{title:'€ / L'}, xaxis:{title:''}, paper_bgcolor:'transparent', plot_bgcolor:'transparent' }, { displayModeBar:false, responsive:true });
-
-		const hX = s.avg_by_hour.map(r => r.hour.padStart(2,'0'));
-		const hY = s.avg_by_hour.map(r => r.avg_price);
-		Plotly.newPlot('chart_hour', [{ x: hX, y: hY, type: 'scatter', mode:'lines+markers', line:{color:'#16a34a'} }], { margin:{t:20,r:10,b:60,l:50}, yaxis:{title:'€ / L'}, xaxis:{title:'Hour'}, paper_bgcolor:'transparent', plot_bgcolor:'transparent' }, { displayModeBar:false, responsive:true });
-
-		const mX = s.avg_by_month.map(r => r.month);
-		const mY = s.avg_by_month.map(r => r.avg_price);
-		Plotly.newPlot('chart_month', [{ x: mX, y: mY, type: 'scatter', mode:'lines', line:{color:'#f59e0b'} }], { margin:{t:20,r:10,b:60,l:50}, yaxis:{title:'€ / L'}, xaxis:{title:'Month'}, paper_bgcolor:'transparent', plot_bgcolor:'transparent' }, { displayModeBar:false, responsive:true });
-
-		const dX = s.min_by_day.map(r => r.day);
-		const dY = s.min_by_day.map(r => r.min_price);
-		Plotly.newPlot('chart_min_day', [{ x: dX, y: dY, type: 'scatter', mode:'lines+markers', line:{color:'#ef4444'} }], { margin:{t:20,r:10,b:60,l:50}, yaxis:{title:'€ / L'}, xaxis:{title:'Day'}, paper_bgcolor:'transparent', plot_bgcolor:'transparent' }, { displayModeBar:false, responsive:true });
-	}
-
-	// Charts are static images now.
+	// Load charts when page is ready
+	document.addEventListener('DOMContentLoaded', loadInteractiveCharts);
 </script>
 {% endblock %} 

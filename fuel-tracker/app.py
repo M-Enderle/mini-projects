@@ -22,6 +22,11 @@ def create_app() -> Flask:
 	@app.context_processor
 	def inject_base_path():
 		return dict(base_path="/fuel-tracker")
+	
+	# Custom static file route to handle base path
+	@app.route('/fuel-tracker/static/<path:filename>')
+	def static_files(filename):
+		return app.send_static_file(filename)
 
 	# Ensure DB exists
 	with app.app_context():
@@ -33,12 +38,14 @@ def create_app() -> Flask:
 		close_db()
 
 	@app.route("/")
+	@app.route("/fuel-tracker/")
 	def index():
 		stations = fetch_stations_with_current_price()
 		base = "/fuel-tracker"
 		return render_template("index.html", stations=stations, base_path=base)
 
 	@app.route("/station/<station_id>")
+	@app.route("/fuel-tracker/station/<station_id>")
 	def station_detail(station_id: str):
 		station = fetch_station_by_id(station_id)
 		if not station:
@@ -47,20 +54,24 @@ def create_app() -> Flask:
 		return render_template("station.html", station=station, base_path=base)
 
 	@app.route("/api/stations")
+	@app.route("/fuel-tracker/api/stations")
 	def api_stations():
 		stations = fetch_stations()
 		return jsonify([dict(row) for row in stations])
 
 	@app.route("/api/station/<station_id>/history")
+	@app.route("/fuel-tracker/api/station/<station_id>/history")
 	def api_station_history(station_id: str):
 		rows = fetch_price_history(station_id)
 		return jsonify([dict(row) for row in rows])
 
 	@app.route("/api/station/<station_id>/stats")
+	@app.route("/fuel-tracker/api/station/<station_id>/stats")
 	def api_station_stats(station_id: str):
 		return jsonify(fetch_price_stats(station_id))
 
 	@app.route("/api/station/<station_id>/chart/<chart_type>.png")
+	@app.route("/fuel-tracker/api/station/<station_id>/chart/<chart_type>.png")
 	def api_station_chart(station_id: str, chart_type: str):
 		if chart_type == "history":
 			rows = [dict(r) for r in fetch_price_history(station_id)]
@@ -93,6 +104,7 @@ def create_app() -> Flask:
 		return resp
 
 	@app.route("/fetch-now", methods=["POST"])  # Non-idempotent on purpose
+	@app.route("/fuel-tracker/fetch-now", methods=["POST"])  # Non-idempotent on purpose
 	def fetch_now():
 		# Trigger a synchronous one-off fetch
 		count = fetch_once_all()

@@ -1,316 +1,319 @@
-import streamlit as st
-import folium
-from streamlit_folium import st_folium
-import pandas as pd
-from kleinanzeigen.scraper import FlexibleKleinanzeigenScraper
+from __future__ import annotations
+
+import csv
+import os
 from datetime import datetime
+from functools import lru_cache
+from pathlib import Path
+from typing import Iterable, List, Tuple
 
-# Simple page config
-st.set_page_config(page_title="Kleinanzeigen-Karte", page_icon="🔍", layout="wide")
+from flask import Flask, flash, jsonify, redirect, render_template, request, session as flask_session, url_for
+from geopy.exc import GeocoderServiceError, GeocoderTimedOut
+from geopy.geocoders import Nominatim
+from sqlalchemy import desc, func
+from werkzeug.middleware.proxy_fix import ProxyFix
 
-# Load PLZ coordinate data
-@st.cache_data
-def load_plz_data():
-    """Load PLZ coordinates from CSV file"""
-    try:
-        df = pd.read_csv('plz_geocoord.csv')
-        # Create a dictionary for fast lookup: PLZ -> (lat, lng)
-        plz_dict = dict(zip(df['plz'].astype(str), zip(df['lat'], df['lng'])))
-        return plz_dict
-    except Exception as e:
-        st.error(f"Fehler beim Laden der PLZ-Daten: {e}")
-        return {}
+from kleinanzeigen import FlexibleKleinanzeigenScraper, KleinanzeigenListing, SessionLocal
 
-# Load PLZ data once
-PLZ_COORDS = load_plz_data()
 
-def get_coordinates_from_plz(plz):
-    """Get coordinates from PLZ using the CSV data"""
-    if not plz:
+DEFAULT_BASE_PATH = "/kleinanzeigen-map"
+DEFAULT_MAX_PAGES = 25
+MAX_PAGES_HARD_LIMIT = 50
+MAX_RESULTS = 300
+
+
+def _normalize_base_path(value: str | None) -> str:
+    if not value:
+        return ""
+    value = value.strip()
+    if not value:
+        return ""
+    if not value.startswith('/'):
+        value = f"/{value}"
+    return value.rstrip('/')
+
+
+def _load_plz_coords() -> dict[str, Tuple[float, float]]:
+    coords: dict[str, Tuple[float, float]] = {}
+    csv_path = Path(__file__).resolve().parent / "plz_geocoord.csv"
+    if not csv_path.exists():
+        return coords
+    with csv_path.open(encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            if not row:
+                continue
+            plz = str(row.get("plz") or "").strip()
+            if not plz:
+                continue
+            try:
+                lat = float(row.get("lat", "") or 0)
+                lng = float(row.get("lng", "") or 0)
+            except (TypeError, ValueError):
+                continue
+            coords[plz] = (lat, lng)
+    return coords
+
+
+PLZ_COORDS = _load_plz_coords()
+
+
+@lru_cache(maxsize=128)
+def _lookup_plz(plz: str | None) -> Tuple[float | None, float | None]:
+    digits = ''.join(ch for ch in (plz or "") if ch.isdigit())
+    if not digits:
         return None, None
-    
-    # Clean PLZ - remove any non-digits and convert to string
-    plz_clean = ''.join(c for c in str(plz) if c.isdigit())
-    if not plz_clean:
-        return None, None
-    
-    # Try to find coordinates
-    coords = PLZ_COORDS.get(plz_clean)
-    if coords:
-        return coords[0], coords[1]  # lat, lng
-    
+    lat_lng = PLZ_COORDS.get(digits)
+    if lat_lng:
+        return lat_lng
     return None, None
 
-# Initialize session state
-if 'results' not in st.session_state:
-    st.session_state.results = None
-if 'last_keyword' not in st.session_state:
-    st.session_state.last_keyword = None
 
-def scrape_data(keyword):
-    """Scrape new data"""
-    scraper = FlexibleKleinanzeigenScraper(keyword)
-    
-    # Progress placeholder
-    progress_text = st.empty()
-    
-    def progress_callback(message):
-        progress_text.text(message)
-    
+@lru_cache(maxsize=64)
+def _geocode_location(plz: str | None, ort: str | None) -> Tuple[float | None, float | None]:
+    query_parts = [part for part in (plz, ort, "Germany") if part]
+    if not query_parts:
+        return None, None
     try:
-        reached_max_pages = scraper.scrape_all_pages(50, progress_callback)
-        scraper.save_to_database(progress_callback)
-        
-        # Get results and add coordinates from PLZ
-        listings = scraper.get_all_listings()
-        
-        # Add coordinates to listings using PLZ lookup
-        progress_callback("Füge GPS-Koordinaten hinzu...")
-        updated_count = 0
-        
-        for listing in listings:
-            if not listing.latitude or not listing.longitude:
-                # Get coordinates from PLZ
-                lat, lng = get_coordinates_from_plz(listing.plz)
-                
-                if lat and lng:
-                    listing.latitude = lat
-                    listing.longitude = lng
-                    updated_count += 1
-                    progress_callback(f"Koordinaten für PLZ {listing.plz} hinzugefügt")
-        
-        # Save updated coordinates
-        if updated_count > 0:
-            scraper.session.commit()
-            progress_callback(f"Koordinaten zu {updated_count} Anzeigen hinzugefügt")
-        
-        # Convert to data format
-        data = []
-        for listing in listings:
-            # Get URL and image from scraped data since they're not stored in database
-            scraped_listing = next((item for item in scraper.all_listings if item['title'] == listing.title and item['plz'] == listing.plz), None)
-            url = scraped_listing['url'] if scraped_listing else ""
-            image_url = scraped_listing['image_url'] if scraped_listing else ""
-            
-            data.append({
-                'title': listing.title,
-                'price': listing.price,
-                'plz': listing.plz,
-                'ort': listing.ort,
-                'url': url,  # Include URL from scraped data
-                'image_url': image_url,  # Include image URL from scraped data
-                'latitude': listing.latitude,
-                'longitude': listing.longitude
-            })
-        
-        scraper.close()
-        
-        # Return data and whether max pages was reached
-        return data, reached_max_pages
-    except Exception as e:
-        st.error(f"Fehler: {e}")
-        scraper.close()
-        return [], False
+        geocoder = Nominatim(user_agent="kleinanzeigen-map-app", timeout=10)
+        location = geocoder.geocode(", ".join(query_parts))
+    except (GeocoderServiceError, GeocoderTimedOut):
+        return None, None
+    if not location:
+        return None, None
+    return location.latitude, location.longitude
 
-def clean_price_display(price_str):
-    """Clean price string for display - keep first price and VB if present"""
-    if not price_str:
+
+def _enrich_coordinates(listings: Iterable[dict]) -> None:
+    for entry in listings:
+        lat = entry.get("latitude")
+        lon = entry.get("longitude")
+        if lat and lon:
+            continue
+        lat, lon = _lookup_plz(entry.get("plz"))
+        if not lat or not lon:
+            lat, lon = _geocode_location(entry.get("plz"), entry.get("ort"))
+        if lat and lon:
+            entry["latitude"] = lat
+            entry["longitude"] = lon
+
+
+def _clean_price_display(value: str | None) -> str | None:
+    if not value:
+        return None
+    first_part = value.split('€')[0].strip()
+    if not first_part:
+        return value
+    cleaned = first_part.replace('VB', '').replace('ab', '').strip()
+    if not cleaned:
+        return value
+    result = f"{cleaned}€"
+    if 'VB' in value:
+        result += " VB"
+    return result
+    
+
+def _price_as_int(value: str | None) -> int | None:
+    if not value:
+        return None
+    part = value.split('€')[0]
+    part = part.replace('VB', '').replace('ab', '').replace('.', '').replace(',', '').strip()
+    digits = ''.join(ch for ch in part if ch.isdigit())
+    if not digits:
+        return None
+    try:
+        return int(digits)
+    except ValueError:
         return None
     
-    # Split by € and take the first part
-    first_part = price_str.split('€')[0].strip()
-    
-    # Check if original had VB after the first price
-    has_vb = 'VB' in price_str and price_str.find('VB') < price_str.find('€', price_str.find('€') + 1) if price_str.count('€') > 1 else 'VB' in price_str
-    
-    # Clean the first part but preserve structure
-    if first_part:
-        # Remove any trailing VB from first part for processing
-        clean_first = first_part.replace('VB', '').strip()
-        if clean_first:
-            result = clean_first + '€'
-            if has_vb:
-                result += ' VB'
-            return result
-    
-    return price_str  # fallback to original
 
-def create_simple_map(data):
-    """Create a simple map"""
-    valid_data = [d for d in data if d['latitude'] and d['longitude']]
-    
-    if not valid_data:
-        return None
-    
-    # Center map on Germany (hardcoded coordinates)
-    germany_center_lat = 51.1657
-    germany_center_lon = 10.4515
-    
-    m = folium.Map(location=[germany_center_lat, germany_center_lon], zoom_start=6)
-    
-    # Calculate price statistics for relative coloring
-    prices = []
-    for item in valid_data:
-        if item['price']:
+def _serialize_listing(listing: KleinanzeigenListing) -> dict:
+    return {
+        "id": listing.id,
+        "keyword": listing.keyword,
+        "title": listing.title,
+        "price": listing.price,
+        "price_display": _clean_price_display(listing.price),
+        "price_value": _price_as_int(listing.price),
+        "plz": listing.plz,
+        "ort": listing.ort,
+        "url": listing.url,
+        "image_url": listing.image_url,
+        "latitude": listing.latitude,
+        "longitude": listing.longitude,
+        "scraped_at": listing.scraped_at.isoformat() if listing.scraped_at else None,
+    }
+
+
+def create_app() -> Flask:
+    base_path = _normalize_base_path(os.environ.get("KLEINANZEIGEN_BASE_PATH", DEFAULT_BASE_PATH))
+    max_pages_default = int(os.environ.get("KLEINANZEIGEN_MAX_PAGES", DEFAULT_MAX_PAGES))
+    max_pages_default = max(1, min(MAX_PAGES_HARD_LIMIT, max_pages_default))
+
+    static_url_path = f"{base_path}/static" if base_path else "/static"
+    app = Flask(__name__, static_folder="static", template_folder="templates", static_url_path=static_url_path)
+    app.config["SECRET_KEY"] = os.environ.get("KLEINANZEIGEN_SECRET_KEY", "kleinanzeigen-map-secret")
+    app.config["BASE_PATH"] = base_path
+    app.config["MAX_PAGES_DEFAULT"] = max_pages_default
+
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+    @app.context_processor
+    def inject_base_path() -> dict:
+        return {"base_path": base_path or ""}
+
+    @app.teardown_appcontext
+    def remove_session(exception: Exception | None = None) -> None:  # noqa: ARG001
+        SessionLocal.remove()
+
+    def _fetch_listings(session_db, keyword: str, min_price: int | None) -> List[dict]:
+        results = (
+            session_db.query(KleinanzeigenListing)
+            .filter(KleinanzeigenListing.keyword == keyword)
+            .order_by(desc(KleinanzeigenListing.scraped_at))
+            .limit(MAX_RESULTS)
+            .all()
+        )
+        data = [_serialize_listing(item) for item in results]
+        if min_price is not None:
+            data = [item for item in data if item["price_value"] is None or item["price_value"] >= min_price]
+        _enrich_coordinates(data)
+        return data
+
+    def index() -> str:
+        session_db = SessionLocal()
+        active_keyword = request.args.get("keyword", "").strip()
+        req_min_price = request.args.get("min_price")
+        active_min_price: int | None = None
+        if req_min_price:
             try:
-                # Same price parsing logic as below
-                price_str = item['price'].split('€')[0].strip()
-                price_str = price_str.replace('VB', '').replace('ab', '').strip()
-                price_str = price_str.replace('.', '').replace(',', '')
-                price_clean = ''.join(c for c in price_str if c.isdigit())
-                
-                if price_clean and price_clean.isdigit():
-                    prices.append(int(price_clean))
-            except:
-                continue
-    
-    # Calculate statistics if we have prices
-    price_stats = None
-    if prices:
-        import statistics
-        avg_price = statistics.mean(prices)
+                active_min_price = max(0, int(req_min_price))
+            except ValueError:
+                active_min_price = None
+
+        recent_searches = flask_session.get("recent_searches")
+        if not isinstance(recent_searches, list):
+            recent_searches = []
+
+        if not active_keyword and recent_searches:
+            active_keyword = recent_searches[0].get("keyword", "")
+            active_min_price = recent_searches[0].get("min_price")
+
+        listings: List[dict] = []
+        last_scraped: datetime | None = None
+        if active_keyword:
+            listings = _fetch_listings(session_db, active_keyword, active_min_price)
+            if listings:
+                ts = listings[0].get("scraped_at")
+                last_scraped = datetime.fromisoformat(ts) if ts else None
+
+        return render_template(
+            "index.html",
+            active_keyword=active_keyword,
+            active_min_price=active_min_price,
+            listings=listings,
+            recent_searches=recent_searches,
+            last_scraped=last_scraped,
+            max_pages_default=app.config["MAX_PAGES_DEFAULT"],
+        )
+
+    def trigger_scrape() -> str:
+        keyword = request.form.get("keyword", "").strip()
+        if not keyword:
+            flash("Bitte gib einen Suchbegriff ein.", "error")
+            return redirect(url_for("index"))
+
         try:
-            std_dev = statistics.stdev(prices) if len(prices) > 1 else 0
-        except:
-            std_dev = 0
-        price_stats = {'avg': avg_price, 'std': std_dev}
-    
-    # Add markers with color coding based on price
-    for item in valid_data:
-        # Determine marker color based on price
-        color = 'blue'  # default color
-        icon = 'info-sign'
-        
-        if item['price']:
+            max_pages = int(request.form.get("max_pages") or app.config["MAX_PAGES_DEFAULT"])
+        except ValueError:
+            max_pages = app.config["MAX_PAGES_DEFAULT"]
+        max_pages = max(1, min(MAX_PAGES_HARD_LIMIT, max_pages))
+
+        min_price: int | None = None
+        req_min_price = request.form.get("min_price")
+        if req_min_price:
             try:
-                # Cut everything after the first € sign
-                price_str = item['price'].split('€')[0].strip()
-                
-                # Remove common non-numeric characters but keep digits and dots/commas
-                price_str = price_str.replace('VB', '').replace('ab', '').strip()
-                
-                # Replace common thousand separators
-                price_str = price_str.replace('.', '').replace(',', '')
-                
-                # Extract only digits
-                price_clean = ''.join(c for c in price_str if c.isdigit())
-                
-                if price_clean and price_clean.isdigit():
-                    price_val = int(price_clean)
-                    
-                    # Color coding based on relative price (standard deviations from mean)
-                    if price_stats and price_stats['std'] > 0:
-                        avg = price_stats['avg']
-                        std = price_stats['std']
-                        
-                        # Calculate how many standard deviations from mean
-                        z_score = (price_val - avg) / std
-                        
-                        if z_score < -1.5:  # Much below average
-                            color = 'green'
-                            icon = 'euro-sign'
-                        elif z_score < -0.5:  # Below average
-                            color = 'lightgreen'
-                            icon = 'euro-sign'
-                        elif z_score < 0.5:  # Around average
-                            color = 'orange'
-                            icon = 'euro-sign'
-                        elif z_score < 1.5:  # Above average
-                            color = 'red'
-                            icon = 'euro-sign'
-                        else:  # Much above average
-                            color = 'darkred'
-                            icon = 'euro-sign'
-                    else:
-                        # Fallback to simple ranges if no statistics available
-                        if price_val < 100:
-                            color = 'green'
-                        elif price_val < 500:
-                            color = 'orange'
-                        else:
-                            color = 'red'
-                        icon = 'euro-sign'
-                        
-            except (ValueError, AttributeError):
-                # If price parsing fails, use default blue
-                color = 'blue'
-                icon = 'info-sign'
-        
-        # Clean price for display
-        clean_price = clean_price_display(item['price'])
-        
-        popup_content = f"<b>{item['title'][:50]}</b><br><b>Preis: {clean_price or 'k.A.'}</b><br>Standort: {item['plz']} {item['ort']}"
-        
-        # Add image if available
-        if item.get('image_url'):
-            popup_content += f"<br><img src='{item['image_url']}' style='max-width: 200px; max-height: 150px; margin-top: 5px;'>"
-        
-        # Add URL link if available
-        if item.get('url'):
-            popup_content += f"<br><a href='{item['url']}' target='_blank'>Anzeige ansehen</a>"
-            
-        folium.Marker(
-            location=[item['latitude'], item['longitude']],
-            popup=popup_content,
-            tooltip=f"{clean_price or 'Kein Preis'} - {item['ort']}",
-            icon=folium.Icon(color=color, icon=icon, prefix='fa')
-        ).add_to(m)
-    
-    return m
+                min_price = max(0, int(req_min_price))
+            except ValueError:
+                min_price = None
 
-# Main UI
-st.title("Kleinanzeigen-Karte")
+        scraper = FlexibleKleinanzeigenScraper(keyword, min_price=min_price)
 
-# Simple input form
-col1, col2 = st.columns([4, 1])
+        try:
+            def _log(message: str) -> None:
+                app.logger.info("scrape[%s]: %s", keyword, message)
 
-with col1:
-    keyword = st.text_input("Suche nach:")
+            reached_limit = scraper.scrape_all_pages(max_pages=max_pages, progress_callback=_log)
+            if len(scraper.all_listings) > MAX_RESULTS:
+                scraper.all_listings = scraper.all_listings[:MAX_RESULTS]
+                reached_limit = True
+            _enrich_coordinates(scraper.all_listings)
+            scraper.save_to_database(_log)
+            total = len(scraper.all_listings)
+            message = f"{total} Anzeigen gespeichert."
+            if reached_limit:
+                message += " Es wurden nur die ersten {max_pages} Seiten berücksichtigt."
+            flash(message, "success")
+        except Exception as exc:  # noqa: BLE001
+            app.logger.exception("Scraping fehlgeschlagen")
+            flash(f"Fehler beim Scrapen: {exc}", "error")
+        finally:
+            scraper.close()
 
-with col2:
-    st.write("")  # spacing
-    search_btn = st.button("🔍 Suchen", type="primary", use_container_width=True)
+        recent_searches = flask_session.get("recent_searches")
+        if not isinstance(recent_searches, list):
+            recent_searches = []
+        new_entry = {"keyword": keyword, "min_price": min_price}
+        recent_searches = [entry for entry in recent_searches if not (entry.get("keyword") == keyword and entry.get("min_price") == min_price)]
+        recent_searches.insert(0, new_entry)
+        flask_session["recent_searches"] = recent_searches[:10]
+        flask_session.modified = True
 
-# Search action - always scrape fresh data
-if search_btn and keyword:
-    with st.spinner("Suche läuft..."):
-        results, reached_max_pages = scrape_data(keyword)
-        if results:
-            st.session_state.results = results
-            st.session_state.last_keyword = keyword
-            success_message = f"{len(results)} Anzeigen gefunden!"
-            if reached_max_pages:
-                success_message += " ⚠️ Es werden nur die ersten 50 Seiten angezeigt."
-            st.success(success_message)
-        else:
-            st.warning("Keine Ergebnisse gefunden")
+        redirect_kwargs = {"keyword": keyword}
+        if min_price is not None:
+            redirect_kwargs["min_price"] = min_price
+        return redirect(url_for("index", **redirect_kwargs))
 
-# Display results
-if st.session_state.results:
-    data = st.session_state.results
-    
-    # Map
-    st.subheader("📍 Karte")
-    
-    # Calculate and show price statistics
-    prices = []
-    for item in data:
-        if item['price']:
-            try:
-                price_str = item['price'].split('€')[0].strip()
-                price_str = price_str.replace('VB', '').replace('ab', '').strip()
-                price_str = price_str.replace('.', '').replace(',', '')
-                price_clean = ''.join(c for c in price_str if c.isdigit())
-                if price_clean and price_clean.isdigit():
-                    prices.append(int(price_clean))
-            except:
-                continue
-    
-    map_obj = create_simple_map(data)
-    if map_obj:
-        st_folium(map_obj, width="100%", height=500)
-    else:
-        st.info("Keine Standorte zum Anzeigen auf der Karte gefunden")
+    def api_listings() -> str:
+        session = SessionLocal()
+        keyword = request.args.get("keyword", "").strip()
+        if not keyword:
+            rows = (
+                session.query(KleinanzeigenListing.keyword)
+                .order_by(desc(KleinanzeigenListing.scraped_at))
+                .limit(1)
+                .all()
+            )
+            keyword = rows[0][0] if rows else ""
+        listings = _fetch_listings(session, keyword) if keyword else []
+        return jsonify({"keyword": keyword, "items": listings})
 
-else:
-    st.info("Gib einen Suchbegriff ein und klicke auf Suchen um zu beginnen") 
+    index_rule = (base_path or "") + "/"
+    if not index_rule.startswith("/"):
+        index_rule = "/" + index_rule
+    if index_rule == "//":
+        index_rule = "/"
+
+    app.add_url_rule(index_rule, endpoint="index", view_func=index, methods=["GET"])
+    app.add_url_rule(index_rule, endpoint="scrape", view_func=trigger_scrape, methods=["POST"])
+
+    if index_rule != "/":
+        app.add_url_rule("/", endpoint="root_index", view_func=index, methods=["GET"])
+        app.add_url_rule("/", endpoint="root_scrape", view_func=trigger_scrape, methods=["POST"])
+
+    api_rule = (base_path or "") + "/api/listings"
+    if not api_rule.startswith("/"):
+        api_rule = "/" + api_rule
+    app.add_url_rule(api_rule, endpoint="api_listings", view_func=api_listings, methods=["GET"])
+    if api_rule != "/api/listings":
+        app.add_url_rule("/api/listings", endpoint="api_listings_root", view_func=api_listings, methods=["GET"])
+
+    return app
+
+
+app = create_app()
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5003)), debug=False)
+

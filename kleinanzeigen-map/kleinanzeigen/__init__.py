@@ -2,6 +2,6 @@
 Kleinanzeigen scraper package
 """
 
-from .scraper import FlexibleKleinanzeigenScraper, KleinanzeigenListing
+from .scraper import FlexibleKleinanzeigenScraper, KleinanzeigenListing, SessionLocal
 
-__all__ = ['FlexibleKleinanzeigenScraper', 'KleinanzeigenListing']
+__all__ = ['FlexibleKleinanzeigenScraper', 'KleinanzeigenListing', 'SessionLocal']

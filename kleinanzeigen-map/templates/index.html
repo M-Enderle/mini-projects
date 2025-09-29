@@ -1,0 +1,148 @@
+{% extends 'layout.html' %}
+{% block title %}Kleinanzeigen Map{% endblock %}
+{% block content %}
+<section class="hero">
+  <p class="eyebrow">Suchen, entdecken, vergleichen</p>
+  <h1 class="page-title">Kleinanzeigen Karte</h1>
+  <p class="lede">Durchsuche aktuelle Kleinanzeigen und sieh sofort, wo die besten Angebote stehen.</p>
+</section>
+
+<section class="search">
+  <form method="post" action="{{ base_path or '/' }}">
+    <div class="search-row">
+      <label>
+        <span>Suchbegriff</span>
+        <input type="text" name="keyword" placeholder="z.&nbsp;B. Rennrad" value="{{ active_keyword }}" required>
+      </label>
+      <label>
+        <span>Preis ab</span>
+        <input type="number" name="min_price" min="0" step="10" placeholder="0" value="{{ active_min_price if active_min_price is not none else '' }}">
+      </label>
+      <label>
+        <span>Seitenlimit</span>
+        <input type="number" min="1" max="50" name="max_pages" value="{{ max_pages_default }}">
+      </label>
+      <button type="submit" class="btn">Scrapen</button>
+    </div>
+  </form>
+  {% if recent_searches %}
+  <div class="recent">
+    <span class="label">Zuletzt gesucht:</span>
+    <ul>
+      {% for entry in recent_searches %}
+      <li>
+        <a href="{{ base_path or '/' }}?keyword={{ entry.keyword | urlencode }}{% if entry.min_price is not none %}&min_price={{ entry.min_price }}{% endif %}">
+          {{ entry.keyword }}{% if entry.min_price is not none and entry.min_price > 0 %} · ab {{ entry.min_price }}€{% endif %}
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</section>
+
+{% if listings %}
+<section class="meta">
+  {% if last_scraped %}
+  <p class="muted">Letzte Aktualisierung: {{ last_scraped }}</p>
+  {% endif %}
+  <p class="muted">Gefundene Inserate: <span id="total-count">{{ listings|length }}</span> · In der Karte: <span id="visible-count">{{ listings|length }}</span></p>
+</section>
+
+<section class="map-section">
+  <div id="map" class="map"></div>
+</section>
+
+<section class="grid" id="listing-grid">
+  {% for item in listings %}
+  <article class="card" data-idx="{{ loop.index0 }}">
+    {% if item.image_url %}
+    <div class="thumb">
+      <img src="{{ item.image_url }}" alt="Bild für {{ item.title }}">
+    </div>
+    {% endif %}
+    <div class="card-body">
+      <header>
+        <h2>{{ item.title }}</h2>
+        {% if item.price_display %}<span class="price">{{ item.price_display }}</span>{% endif %}
+      </header>
+      <p class="description">{{ item.plz }} {{ item.ort }}</p>
+      {% if item.url %}
+      <a class="btn muted" href="{{ item.url }}" target="_blank" rel="noopener">Zur Anzeige</a>
+      {% endif %}
+    </div>
+  </article>
+  {% endfor %}
+</section>
+{% else %}
+<p class="empty">Noch keine Ergebnisse. Starte eine Suche.</p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const listings = {{ listings | tojson }};
+  if (listings.length) {
+    listings.forEach((item, idx) => { item.__idx = idx; });
+    const coords = listings
+      .map(item => item.latitude && item.longitude ? [item.latitude, item.longitude] : null)
+      .filter(Boolean);
+    const map = L.map('map');
+    if (coords.length) {
+      const bounds = L.latLngBounds(coords);
+      map.fitBounds(bounds.pad(0.2));
+    } else {
+      map.setView([51.1657, 10.4515], 6);
+    }
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(map);
+
+    const cards = Array.from(document.querySelectorAll('#listing-grid [data-idx]'));
+    const visibleCountEl = document.getElementById('visible-count');
+
+    const markers = [];
+    listings.forEach(item => {
+      const lat = Number(item.latitude);
+      const lng = Number(item.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return;
+      }
+      const price = item.price_display || 'Preis k.A.';
+      const popupParts = [
+        `<strong>${item.title}</strong>`,
+        `${item.plz || ''} ${item.ort || ''}`.trim(),
+        price
+      ];
+      if (item.url) {
+        popupParts.push(`<a href="${item.url}" target="_blank" rel="noopener">Zur Anzeige</a>`);
+      }
+      const marker = L.marker([lat, lng]).addTo(map).bindPopup(popupParts.join('<br>'));
+      markers.push({ marker, idx: item.__idx });
+    });
+    const updateVisible = () => {
+      if (!cards.length) return;
+      const bounds = map.getBounds();
+      let visible = 0;
+      cards.forEach(card => {
+        const idx = Number(card.dataset.idx);
+        const item = listings[idx];
+        const lat = Number(item?.latitude);
+        const lng = Number(item?.longitude);
+        const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+        const show = !hasCoords || bounds.contains([lat, lng]);
+        card.classList.toggle('hidden', !show);
+        if (show) visible += 1;
+      });
+      if (visibleCountEl) {
+        visibleCountEl.textContent = visible;
+      }
+    };
+
+    map.on('moveend', updateVisible);
+    updateVisible();
+  }
+</script>
+{% endblock %}
+

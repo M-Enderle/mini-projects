@@ -29,6 +29,7 @@ COPY recipe-book/static/favicon.svg /usr/share/nginx/html/favicon.ico
 # Copy static files for serving by nginx
 COPY recipe-book/static/ /usr/share/nginx/html/static/
 COPY fuel-tracker/static/ /usr/share/nginx/html/fuel-tracker-static/
+COPY kleinanzeigen-map/static/ /usr/share/nginx/html/kleinanzeigen-static/
 
 # Simple startup script
 COPY start.sh ./

@@ -1,53 +1,76 @@
-import time
-from urllib.parse import urljoin, quote
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Float
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from __future__ import annotations
+
 from datetime import datetime
+from pathlib import Path
+from urllib.parse import urljoin, quote
+
 import requests
 from bs4 import BeautifulSoup
+from sqlalchemy import Column, DateTime, Float, Integer, String, Text, create_engine, inspect, text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import scoped_session, sessionmaker
 
-# Database setup
+
 Base = declarative_base()
 
+
+DB_PATH = Path(__file__).resolve().parents[1] / "kleinanzeigen.db"
+ENGINE = create_engine(f"sqlite:///{DB_PATH}", future=True)
+SessionLocal = scoped_session(sessionmaker(bind=ENGINE, autoflush=False, expire_on_commit=False))
+
+
+def _ensure_schema() -> None:
+    inspector = inspect(ENGINE)
+    if "listings" not in inspector.get_table_names():
+        Base.metadata.create_all(ENGINE)
+        return
+    columns = {col["name"] for col in inspector.get_columns("listings")}
+    with ENGINE.begin() as conn:
+        if "url" not in columns:
+            conn.execute(text("ALTER TABLE listings ADD COLUMN url TEXT"))
+        if "image_url" not in columns:
+            conn.execute(text("ALTER TABLE listings ADD COLUMN image_url TEXT"))
+
+
+_ensure_schema()
+
 class KleinanzeigenListing(Base):
-    __tablename__ = 'listings'
-    
+    __tablename__ = "listings"
+
     id = Column(Integer, primary_key=True)
-    keyword = Column(String(200))  # Add keyword field
-    title = Column(String(500))
-    price = Column(String(100))  # Keep as string to handle various price formats
+    keyword = Column(String(200), index=True, nullable=False)
+    title = Column(String(500), nullable=False)
+    price = Column(String(100))
     plz = Column(String(10))
     ort = Column(String(200))
-    # url = Column(Text)  # Removed URL storage
-    latitude = Column(Float)  # Add coordinates for mapping
+    url = Column(Text)
+    image_url = Column(Text)
+    latitude = Column(Float)
     longitude = Column(Float)
-    scraped_at = Column(DateTime, default=datetime.utcnow)
+    scraped_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 
 
 
 
 class FlexibleKleinanzeigenScraper:
-    def __init__(self, keyword, db_path="kleinanzeigen.db"):
-        # Setup database
-        self.engine = create_engine(f'sqlite:///{db_path}')
-        Base.metadata.create_all(self.engine)
-        Session = sessionmaker(bind=self.engine)
-        self.session = Session()
-        
-        self.keyword = keyword
-        self.base_url = f"https://www.kleinanzeigen.de/s-seite:{{}}/{quote(keyword)}/k0"
+    def __init__(self, keyword: str, min_price: int | None = None):
+        self.keyword = keyword.strip()
+        if not self.keyword:
+            raise ValueError("keyword is required")
+        self.min_price = min_price if min_price and min_price > 0 else None
+        self.session = SessionLocal()
+        price_segment = f"s-preis:{self.min_price}:" if self.min_price is not None else ""
+        self.base_url = f"https://www.kleinanzeigen.de/{price_segment}s-seite:{{}}/{quote(self.keyword)}/k0"
         self.all_listings = []
-        
-        # Setup requests session with headers
+
         self.session_requests = requests.Session()
         self.session_requests.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'keep-alive',
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate",
+            "Connection": "keep-alive",
         })
         
     def scrape_page(self, page_num, progress_callback=None):
@@ -106,7 +129,7 @@ class FlexibleKleinanzeigenScraper:
                     
                     # Extract URL - store for current results but not in database
                     link_elem = listing.find('a', href=True)
-                    relative_url = link_elem['href'] if link_elem else ""
+                    relative_url = link_elem["href"] if link_elem else ""
                     full_url = urljoin("https://www.kleinanzeigen.de", relative_url) if relative_url else ""
                     
                     # Extract first image
@@ -222,6 +245,8 @@ class FlexibleKleinanzeigenScraper:
                     price=listing_data['price'],
                     plz=listing_data['plz'],
                     ort=listing_data['ort'],
+                    url=listing_data.get('url'),
+                    image_url=listing_data.get('image_url'),
                     latitude=listing_data['latitude'],
                     longitude=listing_data['longitude']
                 )
@@ -253,5 +278,6 @@ class FlexibleKleinanzeigenScraper:
     def close(self):
         """Close database session"""
         self.session.close()
+        SessionLocal.remove()
 
  

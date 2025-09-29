@@ -9,18 +9,18 @@
 	<a class="card" href="{{ base_path }}/station/{{ s['external_id'] }}">
 		<div class="card-header">
 			{% if s['logo_url'] %}<img src="{{ s['logo_url'] }}" alt="logo" class="logo"/>{% endif %}
-			<h2>{{ s['name'] or 'Unknown' }}</h2>
+			<h2>{{ s['name'] or 'Unbekannt' }}</h2>
 			{% if s['current_price'] %}
 				<span class="price">{{ "%.3f"|format(s['current_price']) }}€</span>
 			{% endif %}
 		</div>
 		<div class="card-body">
-			<p class="muted">{{ s['street'] }} {{ s['house_number'] }}, {{ s['postal_code'] }} {{ s['city'] }}</p>
+			<p class="description">{{ s['street'] }} {{ s['house_number'] }}, {{ s['postal_code'] }} {{ s['city'] }}</p>
 		</div>
 	</a>
 	{% else %}
 		<div class="empty">
-			<p>Noch keine Tankstellen. Füge Einträge in <code>fuel-tracker/data/urls.txt</code> im Format <code>Name,URL</code> hinzu und warte ~1 Minute auf die Aktualisierung oder drücke "Jetzt aktualisieren".</p>
+			<p>Noch keine Tankstellen verfügbar. Füge Einträge in <code>fuel-tracker/data/urls.txt</code> im Format <code>Name,URL</code> hinzu und warte ~1 Minute auf die Aktualisierung oder drücke "Aktualisieren".</p>
 		</div>
 	{% endfor %}
 </div>
