@@ -1,6 +1,9 @@
 {% extends 'layout.html' %}
 {% block content %}
-<h1 class="page-title">Tankstellen</h1>
+<section class="hero">
+	<h1 class="page-title">Tankstellen</h1>
+</section>
+
 <div class="grid">
 	{% for s in stations %}
 	<a class="card" href="{{ base_path }}/station/{{ s['external_id'] }}">
@@ -11,8 +14,9 @@
 				<span class="price">{{ "%.3f"|format(s['current_price']) }}€</span>
 			{% endif %}
 		</div>
-		<p class="muted">{{ s['street'] }} {{ s['house_number'] }}, {{ s['postal_code'] }} {{ s['city'] }}</p>
-
+		<div class="card-body">
+			<p class="muted">{{ s['street'] }} {{ s['house_number'] }}, {{ s['postal_code'] }} {{ s['city'] }}</p>
+		</div>
 	</a>
 	{% else %}
 		<div class="empty">

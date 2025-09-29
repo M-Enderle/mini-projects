@@ -1,6 +1,7 @@
 {% extends 'layout.html' %}
 {% block content %}
 <a href="{{ base_path }}/" class="back">← Zurück</a>
+
 <div class="station-header">
 	<div class="info">
 		<div class="title-row">
@@ -12,33 +13,34 @@
 		<p class="muted">{{ station['street'] }} {{ station['house_number'] }}, {{ station['postal_code'] }} {{ station['city'] }}</p>
 	</div>
 </div>
+
 <div class="two-col">
 	<div>
-		<h2 style="margin: 16px 0 12px 0;">Karte</h2>
+		<h2 class="section-title">Karte</h2>
 		<div id="map" class="map"></div>
 	</div>
 	<div>
-		<h2 style="margin: 16px 0 12px 0;">Preisverlauf</h2>
+		<h2 class="section-title">Preisverlauf</h2>
 		<div class="chart"><img src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/history.png" alt="Preisverlauf"/></div>
 	</div>
 </div>
 
-<div class="grid" style="margin-top:24px; grid-template-columns: 1fr;">
-	<div class="card">
+<div class="grid" style="margin-top: 48px;">
+	<div class="chart">
 		<h2 class="chart-title">Durchschnittspreis pro Wochentag</h2>
-		<div class="chart"><img src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/weekday.png" alt="Durchschnitt pro Wochentag"/></div>
+		<img src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/weekday.png" alt="Durchschnitt pro Wochentag"/>
 	</div>
-	<div class="card">
+	<div class="chart">
 		<h2 class="chart-title">Durchschnittspreis pro Stunde</h2>
-		<div class="chart"><img src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/hour.png" alt="Durchschnitt pro Stunde"/></div>
+		<img src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/hour.png" alt="Durchschnitt pro Stunde"/>
 	</div>
-	<div class="card">
+	<div class="chart">
 		<h2 class="chart-title">Durchschnittspreis pro Monat</h2>
-		<div class="chart"><img src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/month.png" alt="Durchschnitt pro Monat"/></div>
+		<img src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/month.png" alt="Durchschnitt pro Monat"/>
 	</div>
-	<div class="card">
+	<div class="chart">
 		<h2 class="chart-title">Günstigster Preis pro Tag</h2>
-		<div class="chart"><img src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/min_day.png" alt="Günstigster pro Tag"/></div>
+		<img src="{{ base_path }}/api/station/{{ station['external_id'] }}/chart/min_day.png" alt="Günstigster pro Tag"/>
 	</div>
 </div>
 
