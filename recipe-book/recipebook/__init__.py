@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from dotenv import load_dotenv
 from flask import Flask
 
-from .config import base_path, gemini_model, log_level, secret_key, sqlalchemy_uri
-from .extensions import db
-from .routes import bp as main_bp
-from .services import init_db
+from recipebook.config import base_path, db_filename, gemini_model, log_level, secret_key
+from recipebook.extensions import db
+from recipebook.routes import bp as main_bp
+from recipebook.services import init_db
 
 
 load_dotenv()
@@ -22,7 +23,7 @@ def create_app() -> Flask:
         template_folder="../templates",
     )
     app.config.update(
-        SQLALCHEMY_DATABASE_URI=sqlalchemy_uri(),
+        SQLALCHEMY_DATABASE_URI=f"sqlite:///{os.path.join(app.instance_path, db_filename())}",
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SECRET_KEY=secret_key(),
         BASE_PATH=base_path(),
@@ -70,6 +71,7 @@ def _register_prefixed_routes(app: Flask) -> None:
         ("recipe_edit_prefixed", "main.recipe_edit", "/recipes/<string:slug>/edit", ["GET", "POST"]),
         ("recipe_delete_prefixed", "main.recipe_delete", "/recipes/<string:slug>/delete", ["POST"]),
         ("recipe_detail_prefixed", "main.recipe_detail", "/recipes/<string:slug>", ["GET"]),
+        ("regenerate_embeddings_prefixed", "main.regenerate_embeddings", "/admin/regenerate-embeddings", ["POST"]),
     ]
 
     for endpoint, source_endpoint, rule_suffix, methods in routes:

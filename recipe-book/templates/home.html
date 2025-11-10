@@ -8,40 +8,24 @@
 </section>
 
 <form class="filters" method="post" action="{{ url_for('home') }}">
-  <div class="field">
+  <div class="field fullwidth">
     <label for="q">Suche</label>
     <input id="q" name="q" type="search" value="{{ query }}" placeholder="Zum Beispiel Zitrus, Pasta, Dessert ...">
-  </div>
-  <div class="field">
-    <label for="source">Quelle</label>
-    <select id="source" name="source">
-      <option value="">Alle Ausgaben</option>
-      {% for source in sources %}
-      <option value="{{ source }}" {% if source == selected_source %}selected{% endif %}>{{ source }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="field">
-    <label for="stars">Bewertung</label>
-    <select id="stars" name="stars">
-      <option value="">Beliebig</option>
-      {% for stars in [5,4,3,2,1] %}
-      <option value="{{ stars }}" {% if stars|string == selected_stars %}selected{% endif %}>ab {{ stars }} ★</option>
-      {% endfor %}
-    </select>
   </div>
   <div class="actions">
     <button type="submit" class="button">Entdecken</button>
   </div>
 </form>
 
-{% if recipes %}
+  {% if recipes %}
 <section class="grid">
   {% for recipe in recipes %}
   <article class="card">
+    {% if recipe.image_url %}
     <a class="image" href="{{ url_for('recipe_detail', slug=recipe.slug) }}">
       <img src="{{ recipe.image_url }}" alt="{{ recipe.title }}">
     </a>
+    {% endif %}
     <div class="card-body">
       <header>
         <p class="source">{{ recipe.source }}</p>
@@ -54,11 +38,7 @@
           <span>{{ tag }}</span>
           {% endfor %}
         </div>
-        <div class="meta">
-          {% if recipe.rating %}
-          <span class="rating">{{ recipe.rating }} ★</span>
-          {% endif %}
-        </div>
+        
       </footer>
     </div>
   </article>
@@ -67,5 +47,11 @@
 {% else %}
 <p class="empty">Noch keine Rezepte für diese Filter.</p>
 {% endif %}
+
+<footer class="admin-footer">
+  <form method="post" action="{{ url_for('regenerate_embeddings') }}" style="display: inline;">
+    <button type="submit" class="button-link" onclick="return confirm('Embeddings für alle Rezepte regenerieren?')">Embeddings regenerieren</button>
+  </form>
+</footer>
 {% endblock %}
 

@@ -1,10 +1,9 @@
 [tool.poetry]
-name = "recipe-book"
+name = "recipebook"
 version = "0.1.0"
 description = "Flask recipe book with vector search"
 authors = ["Moritz Enderle <contact@moritzenderle.com>"]
 readme = "README.md"
-packages = [{include = "recipe_book"}]
 
 [tool.poetry.dependencies]
 python = "^3.13"

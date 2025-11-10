@@ -16,14 +16,6 @@
       <p class="eyebrow">{{ recipe.source }}</p>
       <h1>{{ recipe.title }}</h1>
       <p class="description">{{ recipe.description }}</p>
-      {% if recipe.rating %}
-      {% set rating_value = recipe.rating|float %}
-      <div class="stars" aria-label="Bewertung {{ recipe.rating }} von 5">
-        {% for i in range(1, 6) %}
-        <span class="star{% if i <= rating_value %} filled{% endif %}">★</span>
-        {% endfor %}
-      </div>
-      {% endif %}
       {% if recipe.tags %}
       <div class="filters-row">
         <div class="tags">
@@ -33,12 +25,37 @@
         </div>
       </div>
       {% endif %}
+      {% if recipe.total_time %}
+      <div class="time-info">
+        <svg class="time-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+  <span class="time-value">{{ recipe.total_time|int }} min</span>
+      </div>
+      {% endif %}
     </div>
   </header>
 
   {% if ingredients_list %}
   <section class="ingredients">
-    <h2>Zutaten</h2>
+    <div class="ingredients-header">
+      <h2>Zutaten</h2>
+      <div class="portions-selector">
+        <label for="portions-dropdown">Personen:</label>
+        <select id="portions-dropdown" data-original-portions="{{ recipe.portions or 4 }}">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4" selected>4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="8">8</option>
+          <option value="10">10</option>
+          <option value="12">12</option>
+        </select>
+      </div>
+    </div>
     <div class="ingredients-content">
       {% set current_section = [] %}
       {% for item in ingredients_list %}
@@ -54,7 +71,7 @@
             <ul class="ingredient-section">
             {% set _ = current_section.append(true) %}
           {% endif %}
-          <li class="ingredient-item" data-index="{{ loop.index0 }}">{{ item }}</li>
+          <li class="ingredient-item" data-index="{{ loop.index0 }}" data-original-text="{{ item }}">{{ item }}</li>
         {% endif %}
       {% endfor %}
       {% if current_section %}
@@ -84,6 +101,92 @@
 {% block scripts %}
 {{ super() }}
 <script>
+function parseIngredient(text) {
+  // Patterns for different ingredient formats
+  // Handles: "2 cups flour", "1.5 tbsp sugar", "500g butter", etc.
+  const patterns = [
+    /^([\d.]+)\s*([a-zA-Z]*)\s+(.+)$/,  // "2 cups flour"
+    /^([\d.]+)([a-zA-Z%]*)\s+(.+)$/,    // "2g salt" or "200% liquid"
+  ];
+  
+  text = text.trim();
+  
+  for (let pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) {
+      return {
+        original: text,
+        amount: parseFloat(match[1]),
+        unit: match[2].trim(),
+        ingredient: match[3].trim(),
+        hasAmount: true
+      };
+    }
+  }
+  
+  // No amount found
+  return {
+    original: text,
+    amount: null,
+    unit: null,
+    ingredient: text,
+    hasAmount: false
+  };
+}
+
+function scaleAmount(amount, originalPortions, newPortions) {
+  // Avoid division by zero
+  if (originalPortions === 0) return amount;
+  
+  const scaled = (amount * newPortions) / originalPortions;
+  
+  // Round to reasonable precision (1/8)
+  return Math.round(scaled * 8) / 8;
+}
+
+function formatAmount(amount) {
+  if (amount === null) return '';
+  
+  // Convert to fractions for better readability
+  const fractions = {
+    0.125: '⅛',
+    0.25: '¼',
+    0.375: '⅜',
+    0.5: '½',
+    0.625: '⅝',
+    0.75: '¾',
+    0.875: '⅞'
+  };
+  
+  const whole = Math.floor(amount);
+  const decimal = Math.round((amount - whole) * 8) / 8;
+  
+  let result = '';
+  if (whole > 0) result = whole.toString();
+  
+  if (decimal > 0) {
+    const frac = fractions[decimal];
+    if (frac) {
+      result += (whole > 0 ? ' ' : '') + frac;
+    } else {
+      result += (whole > 0 ? ' ' : '') + decimal.toFixed(2).replace(/\.?0+$/, '');
+    }
+  }
+  
+  return result || amount.toString();
+}
+
+function rebuildIngredientText(parsed, newPortions, originalPortions) {
+  if (!parsed.hasAmount) {
+    return parsed.original;
+  }
+  
+  const scaledAmount = scaleAmount(parsed.amount, originalPortions, newPortions);
+  const formattedAmount = formatAmount(scaledAmount);
+  
+  return formattedAmount + (parsed.unit ? ' ' + parsed.unit : '') + ' ' + parsed.ingredient;
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   // Ingredient selection functionality
   var article = document.querySelector('article.detail');
@@ -93,6 +196,11 @@ document.addEventListener('DOMContentLoaded', function () {
   if (!slug || !items.length) return;
   var name = 'ingredients-' + slug;
   var path = '{{ base_path or "/" }}';
+  
+  // Get original portions from the dropdown
+  const portionsDropdown = document.getElementById('portions-dropdown');
+  const originalPortions = portionsDropdown ? parseInt(portionsDropdown.dataset.originalPortions) : 4;
+  
   function readCookie(key) {
     return document.cookie.split('; ').find(function (row) {
       return row.startsWith(key + '=');
@@ -108,6 +216,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var value = encodeURIComponent(list.join(','));
     document.cookie = name + '=' + value + '; path=' + path + '; max-age=86400';
   }
+  
   var selected = new Set(getSelection());
   items.forEach(function (item) {
     var idx = item.dataset.index;
@@ -121,6 +230,22 @@ document.addEventListener('DOMContentLoaded', function () {
       setSelection(Array.from(selected));
     });
   });
+  
+  // Handle portions dropdown change
+  if (portionsDropdown) {
+    portionsDropdown.addEventListener('change', function () {
+      const newPortions = parseInt(this.value);
+      
+      items.forEach(function (item) {
+        const originalText = item.dataset.originalText;
+        if (originalText) {
+          const parsed = parseIngredient(originalText);
+          const newText = rebuildIngredientText(parsed, newPortions, originalPortions);
+          item.textContent = newText;
+        }
+      });
+    });
+  }
 });
 </script>
 {% endblock %}

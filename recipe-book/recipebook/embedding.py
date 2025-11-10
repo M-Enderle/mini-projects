@@ -6,8 +6,8 @@ from typing import Optional
 import numpy as np
 from google import genai
 
-from .config import gemini_api_key
-from .models import Recipe
+from recipebook.config import gemini_api_key
+from recipebook.models import Recipe
 
 logger = logging.getLogger(__name__)
 _client: Optional[genai.Client] = None
@@ -36,6 +36,10 @@ def embed_recipe(recipe: Recipe) -> None:
             text_parts.append(f"Quelle: {recipe.source}")
         if recipe.tags:
             text_parts.append(f"Tags: {', '.join(recipe.tags)}")
+        if recipe.ingredients:
+            text_parts.append(f"Zutaten: {recipe.ingredients}")
+        if recipe.steps:
+            text_parts.append(f"Schritte: {recipe.steps}")
         
         text = " | ".join(text_parts)
         
@@ -83,11 +87,14 @@ def embed_query(query: str) -> Optional[np.ndarray]:
     try:
         if not query.strip():
             return None
+        
+        # Add context prefix to improve semantic search
+        enhanced_query = f"Ich suche nach einem Rezept mit den folgenden Eigenschaften: {query}"
             
         client = get_client()
         result = client.models.embed_content(
             model="models/text-embedding-004",
-            contents=query
+            contents=enhanced_query
         )
 
         values = None

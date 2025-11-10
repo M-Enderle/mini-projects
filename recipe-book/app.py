@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from recipe_book import create_app
+from recipebook import create_app
 
 
 app = create_app()

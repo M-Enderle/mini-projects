@@ -8,9 +8,9 @@ from unicodedata import normalize
 
 from flask import current_app, render_template
 
-from .embedding import embed_recipe
-from .extensions import db
-from .models import Recipe
+from recipebook.embedding import embed_recipe
+from recipebook.extensions import db
+from recipebook.models import Recipe
 
 
 def slugify(value: str) -> str:
@@ -89,14 +89,6 @@ def normalize_filters(raw: str) -> str:
     return ", ".join(sorted(parts, key=str.lower))
 
 
-def normalise_rating(raw: Any) -> Optional[int]:
-    try:
-        value = int(raw)
-    except (TypeError, ValueError):
-        return None
-    return value if 1 <= value <= 5 else None
-
-
 def parse_json_to_recipe(json_file):
     if not json_file or json_file.filename == '':
         return None, "Bitte JSON-Datei auswählen."
@@ -127,6 +119,33 @@ def recipe_from_data(item: dict[str, Any]) -> Recipe:
     description = str(item.get("description", "")).strip()
     source = str(item.get("source", "")).strip() or "Unbekannt"
 
+    raw_ingredients = item.get("ingredients", [])
+    if isinstance(raw_ingredients, list):
+        normalised_ingredients: list[Any] = []
+        for entry in raw_ingredients:
+            if isinstance(entry, dict) and entry.get("type") == "header":
+                header_text = str(entry.get("text", "")).strip()
+                if header_text:
+                    normalised_ingredients.append({"type": "header", "text": header_text})
+            else:
+                text_value = str(entry or "").strip()
+                if not text_value:
+                    continue
+                if text_value.startswith("#"):
+                    header_text = text_value.lstrip("#").strip()
+                    if header_text:
+                        normalised_ingredients.append({"type": "header", "text": header_text})
+                else:
+                    normalised_ingredients.append(text_value)
+        ingredients_payload = normalised_ingredients
+    else:
+        ingredients_payload = parse_list_field(str(raw_ingredients or ""))
+
+    try:
+        total_time = int(item.get("total_time", 0)) if item.get("total_time") else 0
+    except (ValueError, TypeError):
+        total_time = 0
+
     return Recipe(
         title=title,
         slug="",
@@ -134,12 +153,9 @@ def recipe_from_data(item: dict[str, Any]) -> Recipe:
         image_url=str(item.get("image_url", "")).strip() or None,
         source=source,
         filters=normalize_filters(item.get("filters", "")),
-        rating=normalise_rating(item.get("rating")),
-        ingredients=json.dumps(
-            item.get("ingredients")
-            if isinstance(item.get("ingredients"), list)
-            else parse_list_field(str(item.get("ingredients", "")))
-        ),
+        portions=int(item.get("portions", 4)) if item.get("portions") else 4,
+        total_time=total_time,
+        ingredients=json.dumps(ingredients_payload),
         steps=json.dumps(parse_steps(item.get("steps", []))),
     )
 
@@ -152,10 +168,86 @@ def empty_recipe() -> Recipe:
         image_url="",
         source="",
         filters="",
-        rating=None,
+        portions=4,
+        total_time=0,
         ingredients=json.dumps([]),
         steps=json.dumps([]),
     )
+
+
+def _ensure_list(value: Any) -> list[Any]:
+    if isinstance(value, list):
+        return value
+    if value in (None, ""):
+        return []
+    if isinstance(value, str):
+        try:
+            data = json.loads(value)
+        except json.JSONDecodeError:
+            return []
+        return data if isinstance(data, list) else []
+    return []
+
+
+def recipe_to_payload(recipe: Recipe) -> dict[str, Any]:
+    ingredients_payload: list[str] = []
+    for item in _ensure_list(recipe.ingredients or []):
+        if isinstance(item, dict) and item.get("type") == "header":
+            header = str(item.get("text", "")).strip()
+            if header:
+                ingredients_payload.append(f"# {header}")
+        else:
+            text = str(item or "").strip()
+            if text:
+                ingredients_payload.append(text)
+
+    steps_payload: list[str] = []
+    for item in _ensure_list(recipe.steps or []):
+        if isinstance(item, dict):
+            text = str(item.get("text", "")).strip()
+        else:
+            text = str(item or "").strip()
+        if text:
+            steps_payload.append(text)
+
+    return {
+        "title": recipe.title or "",
+        "description": recipe.description or "",
+        "image_url": recipe.image_url or "",
+        "source": recipe.source or "",
+        "filters": recipe.filters or "",
+        "portions": recipe.portions or 4,
+        "total_time": recipe.total_time or 0,
+        "ingredients": ingredients_payload,
+        "steps": steps_payload,
+    }
+
+
+def payload_to_recipe(payload: dict[str, Any]) -> Recipe:
+    return recipe_from_data(payload)
+
+
+def build_recipe_from_payload(payload: dict[str, Any]) -> Recipe:
+    recipe = recipe_from_data(payload)
+    if recipe.title:
+        recipe.slug = generate_unique_slug(recipe.title)
+    return recipe
+
+
+def update_recipe_from_payload(recipe: Recipe, payload: dict[str, Any]) -> None:
+    parsed = recipe_from_data(payload)
+    original_title = recipe.title
+
+    recipe.title = parsed.title
+    recipe.description = parsed.description
+    recipe.source = parsed.source
+    recipe.filters = parsed.filters
+    recipe.ingredients = parsed.ingredients
+    recipe.steps = parsed.steps
+    recipe.image_url = parsed.image_url
+
+    if recipe.title != original_title or not recipe.slug:
+        recipe.slug = generate_unique_slug(recipe.title, ignore_id=recipe.id)
 
 
 def ingest_form(recipe: Recipe, data, uploaded_image_url: Optional[str] = None) -> None:
@@ -169,11 +261,26 @@ def ingest_form(recipe: Recipe, data, uploaded_image_url: Optional[str] = None) 
         recipe.image_url = data.get("image_url", recipe.image_url or "").strip() or None
     recipe.source = data.get("source", recipe.source).strip()
     recipe.filters = normalize_filters(data.get("filters", recipe.filters))
-    ingredients_raw = data.get("ingredients", "")
-    recipe.ingredients = json.dumps(parse_list_field(ingredients_raw))
-    steps_raw = data.getlist("steps[]") or []
-    recipe.steps = json.dumps(parse_steps(steps_raw))
-    recipe.rating = normalise_rating(data.get("rating", ""))
+    # Only overwrite ingredients/steps if the form actually submitted them.
+    # When saving from the preview/payload UI the hidden `recipe_payload` contains
+    # the canonical ingredients/steps; the edit form does not include editable
+    # inputs for them, so we must avoid wiping them when those keys are absent.
+    if "ingredients" in data:
+        ingredients_raw = data.get("ingredients", "")
+        recipe.ingredients = json.dumps(parse_list_field(ingredients_raw))
+    if "steps[]" in data or "steps" in data:
+        steps_raw = data.getlist("steps[]") or []
+        recipe.steps = json.dumps(parse_steps(steps_raw))
+    try:
+        portions = int(data.get("portions", recipe.portions or 4))
+        recipe.portions = portions if portions > 0 else 4
+    except (ValueError, TypeError):
+        recipe.portions = recipe.portions or 4
+    try:
+        total_time = int(data.get("total_time", recipe.total_time or 0))
+        recipe.total_time = total_time if total_time >= 0 else 0
+    except (ValueError, TypeError):
+        recipe.total_time = recipe.total_time or 0
     if recipe.title != original_title:
         recipe.slug = generate_unique_slug(recipe.title, ignore_id=recipe.id)
     embed_recipe(recipe)
@@ -185,17 +292,13 @@ def validate_recipe(recipe: Recipe) -> list[str]:
         errors.append("Titel angeben.")
     if not recipe.description:
         errors.append("Beschreibung ergänzen.")
-    if not recipe.image_url:
-        errors.append("Bild-URL angeben.")
-    if recipe.rating is not None and not (1 <= recipe.rating <= 5):
-        errors.append("Bewertung zwischen 1 und 5.")
     return errors
 
 
 def with_recipes(view: Callable):
     @wraps(view)
     def wrapped(*args, **kwargs):
-        from .services import init_db
+        from recipebook.services import init_db
 
         init_db()
         return view(*args, **kwargs)
@@ -209,7 +312,7 @@ def save_recipe(recipe: Recipe) -> None:
 
 
 def render_with(path: str, **context):
-    from .services import fetch_sources
+    from recipebook.services import fetch_sources
 
     context.setdefault("base_path", current_app.config.get("BASE_PATH", ""))
     context.setdefault("sources", fetch_sources())

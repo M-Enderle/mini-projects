@@ -7,8 +7,3 @@ services:
       - kleinanzeigen_data:/app/kleinanzeigen-map
       - fuel_tracker_data:/app/fuel-tracker
       - recipe_book_data:/app/recipe-book
-
-volumes:
-  kleinanzeigen_data:
-  fuel_tracker_data:
-  recipe_book_data:

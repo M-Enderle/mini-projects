@@ -5,7 +5,7 @@ from typing import Optional
 
 import numpy as np
 
-from .extensions import db
+from recipebook.extensions import db
 
 
 class Recipe(db.Model):
@@ -18,11 +18,12 @@ class Recipe(db.Model):
     image_url = db.Column(db.String(300), nullable=True)
     source = db.Column(db.String(120), nullable=False)
     filters = db.Column(db.String(160), nullable=False, default="")
-    rating = db.Column(db.Integer, nullable=True)
     ingredients = db.Column(db.Text, nullable=True)
     steps = db.Column(db.Text, nullable=True)
     embedding = db.Column(db.LargeBinary, nullable=True)
     embedding_dim = db.Column(db.Integer, nullable=True)
+    portions = db.Column(db.Integer, nullable=True, default=4)
+    total_time = db.Column(db.Integer, nullable=True, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     @property

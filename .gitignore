@@ -77,3 +77,5 @@ docker-compose.yaml.bak
 .coverage.*
 htmlcov/
 .pytest_cache/ 
+
+kleinanzeigen-notifier/

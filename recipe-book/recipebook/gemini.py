@@ -3,15 +3,15 @@ from __future__ import annotations
 import json
 import logging
 import mimetypes
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from flask import current_app
 from google import genai
 from google.genai import types
 from playwright.sync_api import sync_playwright
 
-from .config import gemini_api_key, gemini_model
-from .utils import recipe_from_data
+from recipebook.config import gemini_api_key, gemini_model
+from recipebook.utils import recipe_from_data
 
 logger = logging.getLogger(__name__)
 _client: Optional[genai.Client] = None
@@ -118,7 +118,6 @@ def generate_recipe_from_image(image_file):
   "description": "Kurze appetitliche Beschreibung (1-2 Sätze)",
   "source": "Gemini AI",
   "filters": "passende Tags durch Kommata getrennt (z.B. vegetarisch, dessert, schnell)",
-  "rating": null,
   "ingredients": [
     "# Für die Soße",
     "200ml Sahne",
@@ -156,7 +155,6 @@ Antworte ausschließlich mit gültigem JSON im folgenden Format:
   "description": "Kurze appetitliche Beschreibung (1-2 Sätze)",
   "source": "Gemini AI",
   "filters": "passende Tags durch Kommata getrennt (z.B. vegetarisch, dessert, schnell)",
-  "rating": null,
   "ingredients": [
     "# Für die Soße",
     "200ml Sahne",
@@ -186,10 +184,6 @@ def generate_recipe_from_url(url: str):
         return None, "Bitte URL eingeben."
     try:
         html_content = fetch_url_content(url)
-        print(html_content)
-        print("--------------------------------")
-        print(len(html_content))
-        print("--------------------------------")
         prompt = f"""Analysiere diesen HTML-Inhalt und extrahiere ein Rezept daraus:
 
         {html_content}
@@ -202,7 +196,6 @@ Antworte ausschließlich mit gültigem JSON im folgenden Format:
   "source": "Quelle des Inhalts",
   "filters": "passende Tags durch Kommata getrennt (z.B. vegetarisch, dessert, schnell)",
   "image_url": "URL zum Bild des Gerichts",
-  "rating": null,
   "ingredients": [
     "# Für die Soße",
     "200ml Sahne",
@@ -225,4 +218,65 @@ Verwende deutsche Sprache und realistische Mengenangaben. Du kannst Zutaten in A
     except Exception as exc:  # pragma: no cover - defensive
         current_app.logger.exception("Fehler bei der Gemini URL-Analyse")
         return None, f"Fehler bei der URL-Analyse: {exc}"
+
+
+def generate_recipe_via_prompt(prompt: str, base_recipe: Optional[dict[str, Any]] = None):
+    if not prompt.strip():
+        return None, "Bitte Prompt eingeben."
+
+    schema = """{
+  "title": "Name des Gerichts",
+  "description": "Kurze appetitliche Beschreibung (1-2 Sätze)",
+  "source": "Quelle des Rezepts (z. B. Gemini AI oder Originalquelle)",
+  "filters": "passende Tags durch Kommata getrennt (z.B. vegetarisch, dessert, schnell)",
+  "image_url": "Direkter Link zu einem geeigneten Bild des Gerichts oder leer lassen",
+  "ingredients": [
+    "# Für die Soße",
+    "200ml Sahne",
+    "1 EL Senf"
+  ],
+  "steps": [
+    "Schritt 1 der Zubereitung",
+    "Schritt 2 der Zubereitung"
+  ]
+}"""
+
+    try:
+        if base_recipe:
+            base_json = json.dumps(base_recipe, ensure_ascii=False, indent=2)
+            base_context = (
+                "Hier ist das aktuelle Rezept als JSON:\n\n"
+                f"{base_json}\n\n"
+                "Überarbeite dieses Rezept behutsam anhand der folgenden Änderungswünsche."
+            )
+        else:
+            base_context = "Erstelle ein vollständiges neues Rezept basierend auf der folgenden Anfrage."
+
+        instructions = (
+            "Du bist ein gewissenhafter Chefkoch, der Rezepte präzise überarbeitet. "
+            "Arbeite ausschließlich in deutscher Sprache.\n\n"
+            f"{base_context}\n\n"
+            "Anfrage:\n"
+            f"\"\"\"{prompt.strip()}\"\"\"\n\n"
+            "Anforderungen:\n"
+            "- Falls ein Rezept vorhanden ist, übernimm alle Informationen, die nicht widersprochen werden, "
+            "und passe nur die gewünschten Aspekte an.\n"
+            "- Stelle sicher, dass Titel, Beschreibung, Zutaten, Schritte und Quelle vollständig und konsistent bleiben.\n"
+            "- Zutaten als Liste von Strings liefern. Verwende Abschnittsüberschriften mit \"# \" am Zeilenanfang "
+            "(z.B. \"# Für den Teig\").\n"
+            "- Schritte als Liste klarer Strings liefern (mindestens zwei). Keine Markdown-Formatierung.\n"
+            "- Filters als kommaseparierte Stichworte in einem String ausgeben.\n"
+            "- Wenn keine passende Bild-URL vorliegt, setze \"image_url\" auf null oder einen leeren String.\n"
+            "- Gib keine zusätzlichen Felder zurück und verwende keine Markdown-Codeblöcke.\n\n"
+            "Gib ausschließlich gültiges JSON im folgenden Format aus:\n"
+            f"{schema}\n"
+        )
+
+        response = call_gemini([instructions])
+        current_app.logger.debug("Gemini Prompt-Antwort: %s", response)
+        data = extract_recipe_from_json(response)
+        return recipe_from_data(data), None
+    except Exception as exc:  # pragma: no cover - defensive
+        current_app.logger.exception("Fehler bei der Gemini Promptbearbeitung")
+        return None, f"Fehler bei der Promptbearbeitung: {exc}"
 

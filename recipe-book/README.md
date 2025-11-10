@@ -6,9 +6,8 @@ A modern web application for managing and organizing recipes with semantic searc
 
 - 🍳 Create, edit, and organize recipes
 - 🔍 Semantic search using AI embeddings
-- 📁 Filter by source and rating
+- 📁 Filter by source
 - 📤 JSON import for bulk recipe creation
-- ⭐ 5-star rating system
 - 🏷️ Tag-based categorization
 - 📱 Responsive design
 - 🤖 **NEW:** AI recipe generation with Gemini
@@ -66,7 +65,6 @@ The application supports importing recipes via JSON files. You can upload a sing
   "image_url": "https://example.com/panna-cotta.jpg",
   "source": "Meine Küche",
   "filters": "dessert, vegetarisch, glutenfrei",
-  "rating": 4.5,
   "ingredients": [
     "200ml Sahne",
     "50g Zucker",
@@ -128,7 +126,6 @@ The application supports importing recipes via JSON files. You can upload a sing
 | `image_url` | string | No | URL to an image of the finished dish |
 | `source` | string | No | Where the recipe came from (defaults to "Unbekannt") |
 | `filters` | string | No | Comma-separated tags/categories |
-| `rating` | number | No | Rating from 1-5 (can be decimal like 4.5) |
 | `ingredients` | array/string | No | List of ingredients or newline-separated string |
 | `steps` | array/string | No | Cooking steps as objects with "text" field or newline-separated string |
 
@@ -177,7 +174,6 @@ The application uses semantic search powered by Google Gemini embeddings:
 ### Filtering
 
 - **Source**: Filter by recipe source/cookbook
-- **Rating**: Show only recipes with minimum star rating
 
 ## Technical Details
 
@@ -200,11 +196,11 @@ CREATE TABLE recipe (
     image_url VARCHAR(500),
     source VARCHAR(200) NOT NULL,
     filters VARCHAR(500),
-    rating FLOAT,
     ingredients TEXT, -- JSON array with optional section headers (# Header)
     steps TEXT,       -- JSON array
     embedding BLOB,   -- Gemini embedding vector
     embedding_dim INTEGER,
+    portions INTEGER DEFAULT 4,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
