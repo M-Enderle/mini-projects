@@ -1316,6 +1316,26 @@ detail
   margin-bottom: 8px;
 }
 
+.current-image img {
+  width: 100%;
+  max-width: 400px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.current-image .button-danger {
+  background-color: var(--danger, #ef4444);
+  color: white;
+  border: none;
+  font-size: 14px;
+  padding: 8px 16px;
+}
+
+.current-image .button-danger:hover {
+  background-color: var(--danger-dark, #dc2626);
+}
+
 /* Recipe metadata fieldset styling */
 .recipe-metadata {
   border: 1px solid var(--border);

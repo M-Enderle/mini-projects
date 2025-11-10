@@ -79,3 +79,5 @@ htmlcov/
 .pytest_cache/ 
 
 kleinanzeigen-notifier/
+
+data/

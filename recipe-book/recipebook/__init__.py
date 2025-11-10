@@ -22,6 +22,10 @@ def create_app() -> Flask:
         static_url_path=f"{base_path()}/static",
         template_folder="../templates",
     )
+    # Maximum request size (bytes). Useful to protect from very large uploads.
+    # Default to 10 MiB but can be overridden with the MAX_CONTENT_LENGTH env var.
+    max_content = int(os.getenv("MAX_CONTENT_LENGTH", 10 * 1024 * 1024))
+    app.config.setdefault("MAX_CONTENT_LENGTH", max_content)
     app.config.update(
         SQLALCHEMY_DATABASE_URI=f"sqlite:///{os.path.join(app.instance_path, db_filename())}",
         SQLALCHEMY_TRACK_MODIFICATIONS=False,

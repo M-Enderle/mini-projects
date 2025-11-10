@@ -140,6 +140,9 @@
       <div class="current-image">
         <label>Aktuelles Bild</label>
         <img src="{{ display_image_url }}" alt="Aktuelles Rezeptbild">
+        {% if not is_new %}
+        <button type="submit" name="action" value="delete_image" class="button button-danger" formnovalidate>Bild löschen</button>
+        {% endif %}
       </div>
       <div class="divider-text">Neues Bild wählen</div>
       {% endif %}

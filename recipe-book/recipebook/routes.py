@@ -357,6 +357,15 @@ def recipe_edit(slug: str):
             payload = recipe_to_payload(recipe)
             manual_image_url = recipe.image_url or ""
             prompt_text = ""
+        elif action == "delete_image":
+            # Clear the image from the recipe
+            recipe.image_url = None
+            embed_recipe(recipe)
+            save_recipe(recipe)
+            flash("Rezeptbild gelöscht.")
+            manual_image_url = ""
+            payload = recipe_to_payload(recipe)
+            # Reload the form with updated recipe (don't redirect, let user continue editing)
         elif action == "save":
             if not payload:
                 flash("Keine Änderungen zum Speichern vorhanden.")
