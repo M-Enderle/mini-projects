@@ -6,7 +6,10 @@ from typing import Iterable, List, Optional
 
 from flask import g, has_app_context
 
-_DB_PATH = os.path.join(os.path.dirname(__file__), "fuel_tracker.db")
+# Use data directory for persistence; defaults to local 'data' dir relative to this file's parent
+_DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+os.makedirs(_DATA_DIR, exist_ok=True)
+_DB_PATH = os.path.join(_DATA_DIR, "fuel_tracker.db")
 _global_db: Optional[sqlite3.Connection] = None
 
 

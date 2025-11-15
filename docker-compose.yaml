@@ -4,6 +4,12 @@ services:
     ports:
       - "4000:4000"
     volumes:
-      - kleinanzeigen_data:/app/kleinanzeigen-map
-      - fuel_tracker_data:/app/fuel-tracker
-      - recipe_book_data:/app/recipe-book
+      - ./data/kleinanzeigen-map:/app/kleinanzeigen-map/data
+      - ./data/fuel-tracker:/app/fuel-tracker/data
+      - ./data/recipe-book:/app/recipe-book/data
+    networks:
+      - moritz_web
+
+networks:
+  moritz_web:
+    external: true

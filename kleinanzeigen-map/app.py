@@ -17,7 +17,7 @@ from kleinanzeigen import FlexibleKleinanzeigenScraper, KleinanzeigenListing, Se
 
 
 DEFAULT_BASE_PATH = "/kleinanzeigen-map"
-DEFAULT_MAX_PAGES = 25
+DEFAULT_MAX_PAGES = 50
 MAX_PAGES_HARD_LIMIT = 50
 MAX_RESULTS = 300
 
@@ -223,11 +223,8 @@ def create_app() -> Flask:
             flash("Bitte gib einen Suchbegriff ein.", "error")
             return redirect(url_for("index"))
 
-        try:
-            max_pages = int(request.form.get("max_pages") or app.config["MAX_PAGES_DEFAULT"])
-        except ValueError:
-            max_pages = app.config["MAX_PAGES_DEFAULT"]
-        max_pages = max(1, min(MAX_PAGES_HARD_LIMIT, max_pages))
+        # Always use the maximum of 50 pages
+        max_pages = MAX_PAGES_HARD_LIMIT
 
         min_price: int | None = None
         req_min_price = request.form.get("min_price")

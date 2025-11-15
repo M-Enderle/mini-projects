@@ -6,7 +6,7 @@ import os
 from dotenv import load_dotenv
 from flask import Flask
 
-from recipebook.config import base_path, db_filename, gemini_model, log_level, secret_key
+from recipebook.config import base_path, db_filename, db_path, gemini_model, log_level, secret_key
 from recipebook.extensions import db
 from recipebook.routes import bp as main_bp
 from recipebook.services import init_db
@@ -27,7 +27,7 @@ def create_app() -> Flask:
     max_content = int(os.getenv("MAX_CONTENT_LENGTH", 10 * 1024 * 1024))
     app.config.setdefault("MAX_CONTENT_LENGTH", max_content)
     app.config.update(
-        SQLALCHEMY_DATABASE_URI=f"sqlite:///{os.path.join(app.instance_path, db_filename())}",
+        SQLALCHEMY_DATABASE_URI=f"sqlite:///{db_path()}",
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SECRET_KEY=secret_key(),
         BASE_PATH=base_path(),

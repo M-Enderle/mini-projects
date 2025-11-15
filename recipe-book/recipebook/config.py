@@ -11,12 +11,19 @@ def db_filename() -> str:
     return os.getenv("RECIPE_BOOK_DB", "recipe_book.db")
 
 
+def db_path() -> str:
+    """Return full path to database file in data directory."""
+    data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
+    os.makedirs(data_dir, exist_ok=True)
+    return os.path.join(data_dir, db_filename())
+
+
 def secret_key() -> str:
     return os.getenv("RECIPE_BOOK_SECRET", "change-me")
 
 
 def sqlalchemy_uri() -> str:
-    return f"sqlite:///{db_filename()}"
+    return f"sqlite:///{db_path()}"
 
 
 def gemini_api_key() -> str | None:

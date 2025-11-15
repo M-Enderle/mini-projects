@@ -14,7 +14,9 @@ from sqlalchemy.orm import scoped_session, sessionmaker
 Base = declarative_base()
 
 
-DB_PATH = Path(__file__).resolve().parents[1] / "kleinanzeigen.db"
+# Use data directory for persistence
+DB_PATH = Path(__file__).resolve().parents[1] / "data" / "kleinanzeigen.db"
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 ENGINE = create_engine(f"sqlite:///{DB_PATH}", future=True)
 SessionLocal = scoped_session(sessionmaker(bind=ENGINE, autoflush=False, expire_on_commit=False))
 

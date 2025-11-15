@@ -18,10 +18,6 @@
         <span>Preis ab</span>
         <input type="number" name="min_price" min="0" step="10" placeholder="0" value="{{ active_min_price if active_min_price is not none else '' }}">
       </label>
-      <label>
-        <span>Seitenlimit</span>
-        <input type="number" min="1" max="50" name="max_pages" value="{{ max_pages_default }}">
-      </label>
       <button type="submit" class="btn">Scrapen</button>
     </div>
   </form>
